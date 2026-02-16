@@ -9,7 +9,7 @@ class AlertDialogBox extends StatefulWidget {
   final VoidCallback onCancel;
   final Function(DateTime?) onDateSelected;  // Now accepts nullable DateTime
 
-  AlertDialogBox({
+  const AlertDialogBox({
     super.key,
     required this.controller,
     required this.onSave,
@@ -32,18 +32,17 @@ class _AlertDialogBoxState extends State<AlertDialogBox> {
       lastDate: DateTime(2100),
     );
 
-    if (date != null) {
+    if (date != null && mounted) {
       final TimeOfDay? time = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
       );
 
-      if (time != null) {
+      if (time != null && mounted) {
         setState(() {
           selectedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
         });
-
-        widget.onDateSelected(selectedDate);  // Pass the selected date
+        widget.onDateSelected(selectedDate);
       }
     }
   }
@@ -52,7 +51,7 @@ class _AlertDialogBoxState extends State<AlertDialogBox> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.deepPurple[300],
-      content: Container(
+        content: SizedBox(
         height: 180,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,

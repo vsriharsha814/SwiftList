@@ -16,10 +16,9 @@ class _PrintNameState extends State<PrintName> {
 
   // Greet User Method
   void greetUser() {
-    String userName = "";
     setState(() {
       if (myController.text != "") {
-        greetingMessage = "Hello, " + myController.text;
+        greetingMessage = "Hello, ${myController.text}";
       } else {
         greetingMessage = '';
       }
@@ -32,20 +31,20 @@ class _PrintNameState extends State<PrintName> {
       body: Center(
         // Text Field
         child: Padding(
-          padding: EdgeInsets.all(25.0),
+          padding: const EdgeInsets.all(25.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(greetingMessage),
               TextField(
                 controller: myController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   hintText: 'Type your name...'
                 ),
               ),
               // Button
-              ElevatedButton(onPressed: greetUser, child: Text("Tap"),)
+              ElevatedButton(onPressed: greetUser, child: const Text("Tap"),)
             ],
           ),
         )

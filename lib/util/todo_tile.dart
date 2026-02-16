@@ -5,11 +5,11 @@ import 'package:intl/intl.dart';
 class TodoTile extends StatelessWidget {
   final String taskName;
   final bool taskCompleted;
-  final DateTime? dueDate;  // Nullable due date
-  Function(bool?)? onChanged;
-  Function(BuildContext)? deleteFunction;
+  final DateTime? dueDate;
+  final Function(bool?)? onChanged;
+  final Function(BuildContext)? deleteFunction;
 
-  TodoTile({
+  const TodoTile({
     super.key,
     required this.taskName,
     required this.taskCompleted,
@@ -36,7 +36,7 @@ class TodoTile extends StatelessWidget {
           ],
         ),
         child: Container(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.deepPurple[300],
             borderRadius: BorderRadius.circular(10),
@@ -77,7 +77,7 @@ class TodoTile extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   DateFormat('MMM d, yyyy h:mm a').format(dueDate!),  // Format the due date
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
             ],
