@@ -2,7 +2,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:to_do_flutter_app/core/settings/app_settings.dart';
 import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
 
@@ -50,7 +49,6 @@ class TaskDetailPage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
         title: const Text('New subtask'),
         content: TextField(
           controller: controller,
@@ -95,7 +93,6 @@ class TaskDetailPage extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
         title: const Text('Delete task?'),
         content: const Text('This cannot be undone.'),
         actions: [
@@ -181,35 +178,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(false)));
       return;
     }
-    final comment = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final c = TextEditingController();
-        return AlertDialog(
-          backgroundColor: AppColors.cardBackground,
-          title: const Text('Subtask completed'),
-          content: TextField(
-            controller: c,
-            maxLines: 2,
-            decoration: const InputDecoration(hintText: 'Add a comment (optional)', labelText: 'Comment'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Skip')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Done')),
-          ],
-        );
-      },
-    );
-    if (!context.mounted) return;
     await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(true)));
-    final logId = DateTime.now().millisecondsSinceEpoch.toString();
-    await widget.db.insertCompletionLog(CompletionLogsCompanion(
-      id: Value(logId),
-      taskId: Value(t.id),
-      taskTitle: Value(t.title),
-      completedAt: Value(DateTime.now()),
-      comment: Value(comment != null && comment.isNotEmpty ? comment : null),
-    ));
     if (t.rrule != null && t.rrule!.isNotEmpty) {
       final now = DateTime.now();
       DateTime next = t.deadline != null && t.deadline!.isAfter(now) ? t.deadline! : now;
@@ -239,14 +208,14 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
         children: [
           TextField(
             controller: _titleController,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 22,
               fontWeight: FontWeight.w600,
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Task title',
-              hintStyle: TextStyle(color: AppColors.textSecondary),
+              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               border: InputBorder.none,
               isDense: true,
             ),
@@ -256,20 +225,20 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.schedule, size: 18, color: AppColors.textSecondary),
+                Icon(Icons.schedule, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Text(
                   'Due ${DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
                 ),
               ],
             ),
           ],
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Description',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -278,12 +247,12 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
           TextField(
             controller: _descController,
             maxLines: 4,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16),
             decoration: InputDecoration(
               hintText: 'Add a description...',
-              hintStyle: const TextStyle(color: AppColors.textSecondary),
+              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               filled: true,
-              fillColor: AppColors.slateGray,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -303,7 +272,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               ),
             ),
           const SizedBox(height: 20),
-          const Text('Repeat', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          Text('Repeat', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -317,10 +286,10 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
           const SizedBox(height: 24),
           Row(
             children: [
-              const Text(
+              Text(
                 'Subtasks',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -335,15 +304,15 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.slateGray,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '$completed/${list.length}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 13,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   );
@@ -356,24 +325,17 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             stream: widget.db.watchChildrenOf(widget.task.id),
             builder: (context, snapshot) {
               final subtasks = snapshot.data ?? [];
-              return Consumer<AppSettings>(
-                builder: (context, settings, _) {
-                  final displaySubtasks = settings.archiveCompletedTasks
-                      ? subtasks.where((t) => !t.isCompleted).toList()
-                      : subtasks;
-                  if (displaySubtasks.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        subtasks.isEmpty
-                            ? 'No subtasks yet. Tap + to add one.'
-                            : 'All subtasks done and archived.',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      ),
-                    );
-                  }
-                  return Column(
-                    children: displaySubtasks.map((t) => _SubtaskTile(
+              if (subtasks.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'No subtasks yet. Tap + to add one.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
+                  ),
+                );
+              }
+              return Column(
+                children: subtasks.map((t) => _SubtaskTile(
                   task: t,
                   parentTitle: widget.task.title,
                   onToggle: () => _onSubtaskToggle(context, t),
@@ -385,8 +347,6 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   ),
                   onDelete: () => _deleteSubtask(context, t),
                 )).toList(),
-                  );
-                },
               );
             },
           ),
@@ -408,7 +368,6 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
         title: const Text('Delete subtask?'),
         content: Text('Delete "${t.title}"?'),
         actions: [
@@ -426,6 +385,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 }
 
+/// Section to add or edit the completion note for this task (shown when task is completed).
 class _SubtaskTile extends StatelessWidget {
   final Task task;
   final String parentTitle;
@@ -459,7 +419,7 @@ class _SubtaskTile extends StatelessWidget {
         title: Text(
           task.title,
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
             decoration: task.isCompleted ? TextDecoration.lineThrough : null,
           ),
         ),
@@ -467,13 +427,13 @@ class _SubtaskTile extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             'Subtask of $parentTitle',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
         trailing: IconButton(
           icon: const Icon(Icons.delete_outline, size: 22),
           onPressed: onDelete,
-          color: AppColors.textSecondary,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         onTap: onTap,
       ),
@@ -496,7 +456,7 @@ class _RepeatChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: AppColors.actionAccent.withOpacity(0.3),
+      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.3),
     );
   }
 }

@@ -49,6 +49,18 @@ class AppTheme {
           unselectedItemColor: AppColors.textSecondary,
           type: BottomNavigationBarType.fixed,
         ),
+        navigationBarTheme: NavigationBarThemeData(
+          indicatorColor: AppColors.actionAccent,
+          backgroundColor: AppColors.slateGray,
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return const IconThemeData(color: Colors.white, opacity: 1.0);
+            return IconThemeData(color: Colors.white.withOpacity(0.75), opacity: 1.0);
+          }),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+            return TextStyle(color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w500);
+          }),
+        ),
         checkboxTheme: CheckboxThemeData(
           fillColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) return AppColors.actionAccent;
@@ -119,6 +131,18 @@ class AppTheme {
           selectedItemColor: AppColors.actionAccent,
           unselectedItemColor: AppColors.lightTextSecondary,
           type: BottomNavigationBarType.fixed,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          indicatorColor: AppColors.actionAccent,
+          backgroundColor: AppColors.lightCardBackground,
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return const IconThemeData(color: Colors.white, opacity: 1.0);
+            return const IconThemeData(color: AppColors.lightTextSecondary, opacity: 1.0);
+          }),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+            return const TextStyle(color: AppColors.lightTextPrimary, fontWeight: FontWeight.w500);
+          }),
         ),
         checkboxTheme: CheckboxThemeData(
           fillColor: WidgetStateProperty.resolveWith((states) {

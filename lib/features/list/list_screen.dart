@@ -2,7 +2,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:to_do_flutter_app/core/settings/app_settings.dart';
 import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
 import 'package:to_do_flutter_app/features/list/task_detail_page.dart';
@@ -19,7 +18,31 @@ class ListScreen extends StatefulWidget {
 class _ListScreenState extends State<ListScreen> {
   String? _currentParentId;
   String? _parentTitle;
+  bool _showingArchive = false;
+  final Set<String> _selectedTaskIds = {};
   final _quickAddController = TextEditingController();
+
+  bool get _selectionMode => _selectedTaskIds.isNotEmpty;
+
+  void _exitSelectionMode() {
+    setState(() => _selectedTaskIds.clear());
+  }
+
+  void _toggleTaskSelection(String taskId) {
+    setState(() {
+      if (_selectedTaskIds.contains(taskId)) {
+        _selectedTaskIds.remove(taskId);
+      } else {
+        _selectedTaskIds.add(taskId);
+      }
+    });
+  }
+
+  void _selectTaskOnLongPress(String taskId) {
+    setState(() {
+      _selectedTaskIds.add(taskId);
+    });
+  }
 
   @override
   void dispose() {
@@ -57,164 +80,259 @@ class _ListScreenState extends State<ListScreen> {
     return sorted;
   }
 
+  /// Sort by date added (createdAt), oldest first.
+  static List<Task> sortByDateAdded(List<Task> tasks) {
+    final sorted = List<Task>.from(tasks);
+    sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
     return Scaffold(
       appBar: AppBar(
-        title: Text(_parentTitle ?? 'Tasks'),
-        leading: _currentParentId != null
+        title: Text(
+          _selectionMode
+              ? '${_selectedTaskIds.length} selected'
+              : (_showingArchive ? 'Archive' : (_parentTitle ?? 'Tasks')),
+        ),
+        leading: _selectionMode
             ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => _navigateToParentLevel(db),
+                icon: const Icon(Icons.close),
+                tooltip: 'Cancel',
+                onPressed: _exitSelectionMode,
               )
-            : null,
+            : _showingArchive
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _showingArchive = false),
+                  )
+                : _currentParentId != null
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => _navigateToParentLevel(db),
+                      )
+                    : null,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsPage()),
+          if (_selectionMode)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete selected',
+              onPressed: () => _deleteSelectedTasks(context, db),
+            )
+          else ...[
+            IconButton(
+              icon: Icon(_showingArchive ? Icons.inbox_outlined : Icons.archive_outlined),
+              tooltip: _showingArchive ? 'Back to tasks' : 'View archive',
+              onPressed: () => setState(() => _showingArchive = !_showingArchive),
             ),
-          ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              ),
+            ),
+          ],
         ],
       ),
-      body: Column(
-        children: [
-          _QuickAddBar(
-            controller: _quickAddController,
-            hintText: _currentParentId == null ? 'Add a task...' : 'Add a subtask...',
-            onAdd: () => _quickAddTask(db),
-          ),
-          Expanded(
-            child: StreamBuilder<List<Task>>(
-              stream: db.watchChildrenOf(_currentParentId),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.actionAccent));
-                }
-                final tasks = snapshot.data!;
-                return Consumer<AppSettings>(
-            builder: (context, settings, _) {
-              final displayTasks = settings.archiveCompletedTasks
-                  ? tasks.where((t) => !t.isCompleted).toList()
-                  : tasks;
-              if (displayTasks.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.inbox_outlined, size: 64, color: AppColors.textSecondary),
-                      const SizedBox(height: 16),
-                      Text(
-                        _currentParentId == null ? 'No tasks yet' : 'No subtasks',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 18),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        settings.archiveCompletedTasks && tasks.isNotEmpty
-                            ? 'All tasks are done and archived'
-                            : _currentParentId == null
-                                ? 'Type above to add a task'
-                                : 'Type above to add a subtask',
-                        style: TextStyle(color: AppColors.textSecondary.withOpacity(0.8), fontSize: 14),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              final sortedTasks = sortByDeadline(displayTasks);
-              final progress = weightedProgress(displayTasks);
-          final combinedFuture = db.getTaskIdsWithChildren(sortedTasks).then((ids) async {
-            final prog = await db.getSubtaskProgress(ids);
-            return (ids, prog);
-          });
-          return FutureBuilder<(Set<String>, Map<String, ({int completed, int total})>)>(
-            future: combinedFuture,
-            builder: (context, snapshot) {
-              final idsWithChildren = snapshot.data?.$1 ?? {};
-              final subtaskProgress = snapshot.data?.$2 ?? {};
+      body: StreamBuilder<List<Task>>(
+        stream: _currentParentId == null
+            ? db.watchAllTasks()
+            : db.watchChildrenOf(_currentParentId),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.actionAccent));
+          }
+          final rawTasks = snapshot.data!;
+          // On main page: show root tasks + their direct subtasks. In drill-down: show only children.
+          final tasks = _currentParentId == null
+              ? () {
+                  final rootIds = rawTasks.where((t) => t.parentId == null).map((t) => t.id).toSet();
+                  return rawTasks
+                      .where((t) => t.parentId == null || rootIds.contains(t.parentId))
+                      .toList();
+                }()
+              : rawTasks;
+          final showingArchive = _showingArchive;
+          // Main page hides completed roots and completed subtasks; drill-down shows all including archived.
+          final displayTasks = showingArchive
+                  ? tasks.where((t) => t.isCompleted).toList()
+                  : () {
+                      if (_currentParentId != null) {
+                        return tasks; // drill-down: show all children including archived
+                      }
+                      final visibleRootIds = tasks
+                          .where((t) => t.parentId == null && !t.isCompleted)
+                          .map((t) => t.id)
+                          .toSet();
+                      return tasks
+                          .where((t) =>
+                              t.parentId == null
+                                  ? !t.isCompleted
+                                  : visibleRootIds.contains(t.parentId) && !t.isCompleted)
+                          .toList();
+                    }();
+              final sortedTasks = sortByDateAdded(displayTasks);
+              // Progress only counts active (non-archived) tasks; hidden when viewing archive.
+              final activeTasks = tasks.where((t) => !t.isCompleted).toList();
+              final progress = !showingArchive && activeTasks.isNotEmpty
+                  ? weightedProgress(activeTasks)
+                  : 0.0;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              backgroundColor: AppColors.slateGray,
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.actionAccent),
-                              minHeight: 6,
+                  if (!showingArchive)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.actionAccent),
+                                minHeight: 6,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          '${(progress * 100).round()}%',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontFeatures: [FontFeature.tabularFigures()],
+                          const SizedBox(width: 12),
+                          Text(
+                            '${(progress * 100).round()}%',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 12,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  if (!showingArchive)
+                    _QuickAddBar(
+                      controller: _quickAddController,
+                      hintText: _currentParentId == null ? 'Add a task...' : 'Add a subtask...',
+                      onAdd: () => _quickAddTask(db),
+                    ),
+                  if (showingArchive && displayTasks.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text(
+                        '${displayTasks.length} archived',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: sortedTasks.length,
-                      itemBuilder: (context, index) {
-                        final task = sortedTasks[index];
-                        final hasChildren = idsWithChildren.contains(task.id);
-                        final progressInfo = hasChildren ? subtaskProgress[task.id] : null;
-                        return _TaskCard(
-                          task: task,
-                          parentTitle: _currentParentId != null ? _parentTitle : null,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TaskDetailPage(taskId: task.id),
+                    child: displayTasks.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  showingArchive ? Icons.archive_outlined : Icons.inbox_outlined,
+                                  size: 64,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  showingArchive
+                                      ? 'No archived tasks'
+                                      : _currentParentId == null
+                                          ? 'No tasks yet'
+                                          : 'No subtasks',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 18),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  showingArchive
+                                      ? 'No archived tasks'
+                                      : tasks.isNotEmpty
+                                          ? 'All tasks are done and archived'
+                                          : _currentParentId == null
+                                              ? 'Type above to add a task'
+                                              : 'Type above to add a subtask',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8), fontSize: 14),
+                                ),
+                              ],
                             ),
+                          )
+                        : FutureBuilder<(Set<String>, Map<String, ({int completed, int total})>)>(
+                            future: db.getTaskIdsWithChildren(sortedTasks).then((ids) async {
+                              final prog = await db.getSubtaskProgress(ids);
+                              return (ids, prog);
+                            }),
+                            builder: (context, listSnapshot) {
+                              final idsWithChildren = listSnapshot.data?.$1 ?? {};
+                              final subtaskProgress = listSnapshot.data?.$2 ?? {};
+                              final idToTask = {for (var t in sortedTasks) t.id: t};
+                              return ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                itemCount: sortedTasks.length,
+                                itemBuilder: (context, index) {
+                                  final task = sortedTasks[index];
+                                  final hasChildren = idsWithChildren.contains(task.id);
+                                  final progressInfo = hasChildren ? subtaskProgress[task.id] : null;
+                                  final parentTitleForCard = _currentParentId != null
+                                      ? _parentTitle
+                                      : (task.parentId != null ? idToTask[task.parentId]?.title : null);
+                                  final inSelectionMode = _selectionMode;
+                                  return _TaskCard(
+                                    task: task,
+                                    parentTitle: parentTitleForCard,
+                                    onTap: inSelectionMode
+                                        ? () => _toggleTaskSelection(task.id)
+                                        : () => Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => TaskDetailPage(taskId: task.id),
+                                              ),
+                                            ),
+                                    onDrillDown: inSelectionMode
+                                        ? null
+                                        : hasChildren
+                                            ? () => setState(() {
+                                                  _currentParentId = task.id;
+                                                  _parentTitle = task.title;
+                                                })
+                                            : null,
+                                    onToggleComplete: () async {
+                                      if (task.isCompleted) {
+                                        await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false)));
+                                      } else {
+                                        await _markTaskComplete(context, db, task);
+                                      }
+                                    },
+                                    onArchive: () async {
+                                      if (task.isCompleted) {
+                                        await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false)));
+                                      } else {
+                                        await _markTaskComplete(context, db, task);
+                                      }
+                                    },
+                                    hasChildren: hasChildren,
+                                    subtaskCompleted: progressInfo?.completed,
+                                    subtaskTotal: progressInfo?.total,
+                                    isSelectionMode: inSelectionMode,
+                                    isSelected: _selectedTaskIds.contains(task.id),
+                                    onLongPress: () => _selectTaskOnLongPress(task.id),
+                                  );
+                                },
+                              );
+                            },
                           ),
-                          onDrillDown: hasChildren
-                              ? () => setState(() {
-                                    _currentParentId = task.id;
-                                    _parentTitle = task.title;
-                                  })
-                              : null,
-                          onToggleComplete: () async {
-                            if (task.isCompleted) {
-                              await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false)));
-                            } else {
-                              await _markTaskComplete(context, db, task);
-                            }
-                          },
-                          onDelete: () => _deleteTask(context, db, task, hasChildren),
-                          hasChildren: hasChildren,
-                          subtaskCompleted: progressInfo?.completed,
-                          subtaskTotal: progressInfo?.total,
-                        );
-                      },
-                    ),
                   ),
                 ],
               );
-            },
-          );
-            },
-          );
-              },
-            ),
-          ),
-        ],
+        },
       ),
     );
   }
@@ -250,6 +368,51 @@ class _ListScreenState extends State<ListScreen> {
     });
   }
 
+  Future<void> _deleteSelectedTasks(BuildContext context, AppDatabase db) async {
+    if (_selectedTaskIds.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete selected?'),
+        content: Text('Delete ${_selectedTaskIds.length} task(s)? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) return;
+    int deleted = 0;
+    int skipped = 0;
+    for (final id in _selectedTaskIds) {
+      final children = await db.childrenOf(id);
+      if (children.isNotEmpty) {
+        skipped++;
+      } else {
+        await db.deleteTaskAndDependencies(id);
+        deleted++;
+      }
+    }
+    setState(() => _selectedTaskIds.clear());
+    if (!context.mounted) return;
+    if (skipped > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $deleted. $skipped have subtasks and were not deleted.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(deleted == 1 ? 'Task deleted' : '$deleted tasks deleted')),
+      );
+    }
+  }
+
   Future<void> _deleteTask(BuildContext context, AppDatabase db, Task task, bool hasChildren) async {
     if (hasChildren) {
       if (context.mounted) {
@@ -262,7 +425,6 @@ class _ListScreenState extends State<ListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
         title: const Text('Delete task?'),
         content: Text('Delete "${task.title}"?'),
         actions: [
@@ -301,7 +463,6 @@ class _ListScreenState extends State<ListScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: AppColors.cardBackground,
               title: Text(_currentParentId == null ? 'New task' : 'New subtask'),
               content: SingleChildScrollView(
                 child: Column(
@@ -329,7 +490,7 @@ class _ListScreenState extends State<ListScreen> {
                       onSubmitted: (_) => _saveTask(context, db, titleController, descController, selectedDeadline, selectedRepeat),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Repeat', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text('Repeat', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
@@ -381,8 +542,8 @@ class _ListScreenState extends State<ListScreen> {
                             : DateFormat('MMM d, yyyy · h:mm a').format(selectedDeadline!),
                         style: TextStyle(
                           color: selectedDeadline == null
-                              ? AppColors.textSecondary
-                              : AppColors.textPrimary,
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
+                              : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -430,46 +591,9 @@ class _ListScreenState extends State<ListScreen> {
     if (context.mounted) Navigator.pop(context);
   }
 
-  /// Marks task complete, optionally asks for comment, logs completion, and spawns next if recurring.
+  /// Marks task complete and spawns next if recurring.
   Future<void> _markTaskComplete(BuildContext context, AppDatabase db, Task task) async {
-    final comment = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final c = TextEditingController();
-        return AlertDialog(
-          backgroundColor: AppColors.cardBackground,
-          title: const Text('Task completed'),
-          content: TextField(
-            controller: c,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              hintText: 'Add a comment (optional)',
-              labelText: 'Comment',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('Skip'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, c.text.trim()),
-              child: const Text('Done'),
-            ),
-          ],
-        );
-      },
-    );
-    if (!context.mounted) return;
     await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(true)));
-    final logId = DateTime.now().millisecondsSinceEpoch.toString();
-    await db.insertCompletionLog(CompletionLogsCompanion(
-      id: Value(logId),
-      taskId: Value(task.id),
-      taskTitle: Value(task.title),
-      completedAt: Value(DateTime.now()),
-      comment: Value(comment != null && comment.isNotEmpty ? comment : null),
-    ));
     if (task.rrule != null && task.rrule!.isNotEmpty) {
       final now = DateTime.now();
       DateTime next = task.deadline != null && task.deadline!.isAfter(now)
@@ -499,10 +623,13 @@ class _TaskCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDrillDown;
   final VoidCallback onToggleComplete;
-  final VoidCallback onDelete;
+  final VoidCallback onArchive;
   final bool? hasChildren;
   final int? subtaskCompleted;
   final int? subtaskTotal;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
 
   const _TaskCard({
     required this.task,
@@ -510,10 +637,13 @@ class _TaskCard extends StatelessWidget {
     required this.onTap,
     this.onDrillDown,
     required this.onToggleComplete,
-    required this.onDelete,
+    required this.onArchive,
     this.hasChildren,
     this.subtaskCompleted,
     this.subtaskTotal,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onLongPress,
   });
 
   @override
@@ -523,11 +653,15 @@ class _TaskCard extends StatelessWidget {
         task.deadline != null &&
         task.deadline!.isBefore(now);
 
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: isOverdue ? AppColors.slateGray.withOpacity(0.8) : null,
+      color: isOverdue
+          ? colorScheme.errorContainer.withOpacity(0.5)
+          : (isSelected ? colorScheme.primaryContainer.withOpacity(0.5) : null),
       child: InkWell(
         onTap: onTap,
+        onLongPress: isSelectionMode ? null : onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -554,7 +688,7 @@ class _TaskCard extends StatelessWidget {
                           child: Text(
                             task.title,
                             style: TextStyle(
-                              color: AppColors.textPrimary,
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontSize: 16,
                               decoration: task.isCompleted ? TextDecoration.lineThrough : null,
                             ),
@@ -564,7 +698,7 @@ class _TaskCard extends StatelessWidget {
                           IconButton(
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                            icon: const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 24),
+                            icon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 24),
                             onPressed: onDrillDown,
                             tooltip: 'View subtasks',
                           ),
@@ -574,7 +708,7 @@ class _TaskCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Subtask of $parentTitle',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                       ),
                     ],
                     if (hasChildren == true && subtaskTotal != null && subtaskTotal! > 0) ...[
@@ -583,10 +717,10 @@ class _TaskCard extends StatelessWidget {
                         children: [
                           Text(
                             '$subtaskCompleted/$subtaskTotal subtasks',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 12,
-                              fontFeatures: [FontFeature.tabularFigures()],
+                              fontFeatures: const [FontFeature.tabularFigures()],
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -595,7 +729,7 @@ class _TaskCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(2),
                               child: LinearProgressIndicator(
                                 value: (subtaskCompleted ?? 0) / subtaskTotal!,
-                                backgroundColor: AppColors.slateGray,
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 valueColor: const AlwaysStoppedAnimation<Color>(AppColors.actionAccent),
                                 minHeight: 4,
                               ),
@@ -611,7 +745,7 @@ class _TaskCard extends StatelessWidget {
                           Icon(
                             Icons.schedule,
                             size: 14,
-                            color: isOverdue ? Colors.red : AppColors.textSecondary,
+                            color: isOverdue ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -620,7 +754,7 @@ class _TaskCard extends StatelessWidget {
                                 : 'Due ${DateFormat('MMM d, h:mm a').format(task.deadline!)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isOverdue ? Colors.red : AppColors.textSecondary,
+                              color: isOverdue ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
                               fontWeight: isOverdue ? FontWeight.w600 : null,
                             ),
                           ),
@@ -631,11 +765,11 @@ class _TaskCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.repeat, size: 14, color: AppColors.textSecondary),
+                          Icon(Icons.repeat, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           const SizedBox(width: 4),
                           Text(
                             'Repeats ${task.rrule!.toLowerCase()}',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                           ),
                         ],
                       ),
@@ -643,11 +777,21 @@ class _TaskCard extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: onDelete,
-                color: AppColors.textSecondary,
-              ),
+              if (isSelectionMode)
+                Checkbox(
+                  value: isSelected,
+                  onChanged: (_) => onTap(),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                )
+              else
+                IconButton(
+                  icon: Icon(
+                    task.isCompleted ? Icons.unarchive_outlined : Icons.archive_outlined,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  onPressed: onArchive,
+                  tooltip: task.isCompleted ? 'Unarchive' : 'Archive',
+                ),
             ],
           ),
         ),
@@ -669,15 +813,11 @@ class _QuickAddBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.slateGray,
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider, width: 1),
-        ),
-      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: TextField(
@@ -685,20 +825,49 @@ class _QuickAddBar extends StatelessWidget {
               autofocus: false,
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: TextStyle(color: AppColors.textSecondary),
-                border: InputBorder.none,
+                hintStyle: TextStyle(
+                  color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+                filled: true,
+                fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.4), width: 1),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
               onSubmitted: (_) => onAdd(),
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.add_circle, color: AppColors.actionAccent),
-            onPressed: onAdd,
-            tooltip: 'Add task',
+          const SizedBox(width: 10),
+          Material(
+            color: colorScheme.primary,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              onTap: onAdd,
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(Icons.add, color: colorScheme.onPrimary, size: 24),
+              ),
+            ),
           ),
         ],
       ),

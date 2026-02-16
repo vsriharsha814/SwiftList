@@ -101,6 +101,9 @@ class AppDatabase extends _$AppDatabase {
     return (select(tasks)..where((t) => t.parentId.equals(parentId))).watch();
   }
 
+  /// All tasks (for main page: root + subtasks sorted by date added).
+  Stream<List<Task>> watchAllTasks() => select(tasks).watch();
+
   Future<Task?> getTaskById(String id) => (select(tasks)..where((t) => t.id.equals(id))).getSingleOrNull();
 
   /// Stream of a single task by id (for detail page).
@@ -162,6 +165,19 @@ class AppDatabase extends _$AppDatabase {
   Future<void> insertCompletionLog(CompletionLogsCompanion c) => into(completionLogs).insert(c);
   Stream<List<CompletionLog>> watchCompletionLogs({int limit = 50}) =>
       (select(completionLogs)..orderBy([(t) => OrderingTerm.desc(t.completedAt)])..limit(limit)).watch();
+
+  /// Latest completion log for a task (for adding/editing comment on task detail).
+  Stream<CompletionLog?> watchLatestCompletionLogForTask(String taskId) =>
+      (select(completionLogs)
+            ..where((c) => c.taskId.equals(taskId))
+            ..orderBy([(t) => OrderingTerm.desc(t.completedAt)])
+            ..limit(1))
+          .watch()
+          .map((list) => list.isNotEmpty ? list.first : null);
+
+  Future<int> updateCompletionLogComment(String logId, String? comment) =>
+      (update(completionLogs)..where((c) => c.id.equals(logId)))
+          .write(CompletionLogsCompanion(comment: Value(comment)));
 
   // --- Time logs ---
   Future<void> insertTimeLog(TimeLogsCompanion c) => into(timeLogs).insert(c);

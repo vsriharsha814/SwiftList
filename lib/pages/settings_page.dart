@@ -18,79 +18,67 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         children: [
           Consumer<AppSettings>(
-            builder: (context, settings, _) => ListTile(
-              title: const Text('Theme'),
-              subtitle: Text(
-                settings.themeMode == ThemeModePreference.system
-                    ? 'Follow system setting'
-                    : settings.themeMode == ThemeModePreference.light
-                        ? 'Light'
-                        : 'Dark',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  fontSize: 12,
+            builder: (context, settings, _) {
+              final isSystem = settings.themeMode == ThemeModePreference.system;
+              final isLight = settings.themeMode == ThemeModePreference.light;
+              final isDark = settings.themeMode == ThemeModePreference.dark;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Theme'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: FilledButton.tonal(
+                              onPressed: () => settings.setThemeMode(ThemeModePreference.system),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                backgroundColor: isSystem ? Theme.of(context).colorScheme.primaryContainer : null,
+                                foregroundColor: isSystem ? Theme.of(context).colorScheme.onPrimaryContainer : null,
+                              ),
+                              child: const Text('System'),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: FilledButton.tonal(
+                              onPressed: () => settings.setThemeMode(ThemeModePreference.light),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                backgroundColor: isLight ? Theme.of(context).colorScheme.primaryContainer : null,
+                                foregroundColor: isLight ? Theme.of(context).colorScheme.onPrimaryContainer : null,
+                              ),
+                              child: const Text('Light'),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: FilledButton.tonal(
+                              onPressed: () => settings.setThemeMode(ThemeModePreference.dark),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                backgroundColor: isDark ? Theme.of(context).colorScheme.primaryContainer : null,
+                                foregroundColor: isDark ? Theme.of(context).colorScheme.onPrimaryContainer : null,
+                              ),
+                              child: const Text('Dark'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              trailing: PopupMenuButton<ThemeModePreference>(
-                icon: const Icon(Icons.arrow_drop_down),
-                onSelected: (value) => settings.setThemeMode(value),
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: ThemeModePreference.system,
-                    child: Row(
-                      children: [
-                        if (settings.themeMode == ThemeModePreference.system)
-                          const Icon(Icons.check, size: 20),
-                        if (settings.themeMode == ThemeModePreference.system)
-                          const SizedBox(width: 8),
-                        const Text('System'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: ThemeModePreference.light,
-                    child: Row(
-                      children: [
-                        if (settings.themeMode == ThemeModePreference.light)
-                          const Icon(Icons.check, size: 20),
-                        if (settings.themeMode == ThemeModePreference.light)
-                          const SizedBox(width: 8),
-                        const Text('Light'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: ThemeModePreference.dark,
-                    child: Row(
-                      children: [
-                        if (settings.themeMode == ThemeModePreference.dark)
-                          const Icon(Icons.check, size: 20),
-                        if (settings.themeMode == ThemeModePreference.dark)
-                          const SizedBox(width: 8),
-                        const Text('Dark'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Consumer<AppSettings>(
-            builder: (context, settings, _) => SwitchListTile(
-              title: const Text('Keep done tasks in archive'),
-              subtitle: Text(
-                settings.archiveCompletedTasks
-                    ? 'Completed tasks are hidden from the list'
-                    : 'Completed tasks stay visible in the list',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  fontSize: 12,
-                ),
-              ),
-              value: settings.archiveCompletedTasks,
-              onChanged: (value) => settings.setArchiveCompletedTasks(value),
-              activeColor: AppColors.actionAccent,
-            ),
+              );
+            },
           ),
           const Divider(height: 24),
           ListTile(
