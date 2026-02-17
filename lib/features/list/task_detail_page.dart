@@ -262,6 +262,37 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   Future<void> _pickDeadline() async {
+    if (widget.task.deadline != null) {
+      // Show dialog with options: Set Date & Time, Clear Date
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Due Date'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: const Text('Set Date & Time'),
+                onTap: () => Navigator.pop(context, 'set'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.clear),
+                title: const Text('Clear Date'),
+                onTap: () => Navigator.pop(context, 'clear'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (action == 'clear') {
+        await _saveDeadline(null);
+        return;
+      }
+      if (action != 'set') return;
+    }
+    // Proceed with date/time picker
     final date = await showDatePicker(
       context: context,
       initialDate: widget.task.deadline ?? DateTime.now(),
