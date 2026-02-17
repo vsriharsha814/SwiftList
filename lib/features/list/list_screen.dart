@@ -103,6 +103,27 @@ class _ListScreenState extends State<ListScreen> {
     return sorted;
   }
 
+  /// Incomplete first; among incomplete, soonest deadline first (overdue at top, then due in 1 hr, etc.); no deadline last. Completed at bottom by completedAt.
+  static List<Task> sortIncompleteByDeadlineThenCompleted(List<Task> tasks) {
+    final sorted = List<Task>.from(tasks);
+    sorted.sort((a, b) {
+      if (!a.isCompleted && b.isCompleted) return -1;
+      if (a.isCompleted && !b.isCompleted) return 1;
+      if (!a.isCompleted && !b.isCompleted) {
+        final aHas = a.deadline != null;
+        final bHas = b.deadline != null;
+        if (!aHas && !bHas) return a.createdAt.compareTo(b.createdAt);
+        if (!aHas) return 1;
+        if (!bHas) return -1;
+        return a.deadline!.compareTo(b.deadline!);
+      }
+      final aAt = a.completedAt ?? DateTime(0);
+      final bAt = b.completedAt ?? DateTime(0);
+      return aAt.compareTo(bAt);
+    });
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
@@ -136,11 +157,19 @@ class _ListScreenState extends State<ListScreen> {
               icon: Icon(_showingArchive ? Icons.unarchive_outlined : Icons.archive_outlined),
               tooltip: _showingArchive ? 'Unarchive selected' : 'Archive selected',
               onPressed: () => _showingArchive ? _unarchiveSelectedTasks(context, db) : _archiveSelectedTasks(context, db),
+              style: IconButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.tertiary,
+                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer.withOpacity(0.6),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete selected',
               onPressed: () => _deleteSelectedTasks(context, db),
+              style: IconButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+                backgroundColor: Theme.of(context).colorScheme.errorContainer.withOpacity(0.6),
+              ),
             ),
           ] else ...[
             IconButton(
@@ -198,11 +227,10 @@ class _ListScreenState extends State<ListScreen> {
                                   : visibleRootIds.contains(t.parentId) && !t.isArchived)
                           .toList();
                     }();
-              final sortedTasks = sortIncompleteFirstThenCompletedByCheckedOff(displayTasks);
-              // Progress: incomplete, non-archived tasks only.
-              final activeTasks = tasks.where((t) => !t.isCompleted && !t.isArchived).toList();
-              final progress = !showingArchive && activeTasks.isNotEmpty
-                  ? weightedProgress(activeTasks)
+              final sortedTasks = sortIncompleteByDeadlineThenCompleted(displayTasks);
+              // Progress: completed vs total among the tasks we're showing (non-archived when on main list).
+              final progress = !showingArchive && displayTasks.isNotEmpty
+                  ? weightedProgress(displayTasks)
                   : 0.0;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -412,11 +440,16 @@ class _ListScreenState extends State<ListScreen> {
 
   Future<void> _deleteSelectedTasks(BuildContext context, AppDatabase db) async {
     if (_selectedTaskIds.isEmpty) return;
+    final count = _selectedTaskIds.length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete selected?'),
-        content: Text('Delete ${_selectedTaskIds.length} task(s)? This cannot be undone.'),
+        content: Text(
+          count == 1
+              ? 'Permanently delete this task? This cannot be undone.'
+              : 'Permanently delete $count tasks? This cannot be undone. Tasks with subtasks will be skipped.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -464,11 +497,16 @@ class _ListScreenState extends State<ListScreen> {
       }
       return;
     }
+    final isRepeating = task.rrule != null && task.rrule!.isNotEmpty;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete task?'),
-        content: Text('Delete "${task.title}"?'),
+        content: Text(
+          isRepeating
+              ? 'Delete "${task.title}"? This is a repeating task. This occurrence will be removed and no future occurrences will be created. This cannot be undone.'
+              : 'Permanently delete "${task.title}"? This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -686,13 +724,19 @@ class _TaskCard extends StatelessWidget {
     final isOverdue = !task.isCompleted &&
         task.deadline != null &&
         task.deadline!.isBefore(now);
+    final isDueSoon = !task.isCompleted &&
+        task.deadline != null &&
+        !isOverdue &&
+        task.deadline!.difference(now).inMinutes <= 60;
 
     final colorScheme = Theme.of(context).colorScheme;
+    Color? cardColor;
+    if (isSelected) cardColor = colorScheme.primaryContainer.withOpacity(0.5);
+    else if (isOverdue) cardColor = colorScheme.errorContainer.withOpacity(0.5);
+    else if (isDueSoon) cardColor = colorScheme.tertiaryContainer.withOpacity(0.5);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: isOverdue
-          ? colorScheme.errorContainer.withOpacity(0.5)
-          : (isSelected ? colorScheme.primaryContainer.withOpacity(0.5) : null),
+      color: cardColor,
       child: InkWell(
         onTap: onTap,
         onLongPress: isSelectionMode ? null : onLongPress,
@@ -779,17 +823,32 @@ class _TaskCard extends StatelessWidget {
                           Icon(
                             Icons.schedule,
                             size: 14,
-                            color: isOverdue ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: isOverdue
+                                ? Colors.red
+                                : isDueSoon
+                                    ? colorScheme.tertiary
+                                    : Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             isOverdue
                                 ? 'Overdue · ${DateFormat('MMM d, h:mm a').format(task.deadline!)}'
-                                : 'Due ${DateFormat('MMM d, h:mm a').format(task.deadline!)}',
+                                : isDueSoon
+                                    ? () {
+                                        final mins = task.deadline!.difference(now).inMinutes;
+                                        if (mins < 1) return 'Due any moment';
+                                        if (mins < 60) return 'Due in $mins min · ${DateFormat('MMM d, h:mm a').format(task.deadline!)}';
+                                        return 'Due in 1 hr · ${DateFormat('MMM d, h:mm a').format(task.deadline!)}';
+                                      }()
+                                    : 'Due ${DateFormat('MMM d, h:mm a').format(task.deadline!)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isOverdue ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontWeight: isOverdue ? FontWeight.w600 : null,
+                              color: isOverdue
+                                  ? Colors.red
+                                  : isDueSoon
+                                      ? colorScheme.tertiary
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: (isOverdue || isDueSoon) ? FontWeight.w600 : null,
                             ),
                           ),
                         ],

@@ -24,12 +24,16 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
   String? _freq;
   final Set<int> _days = {};
   int? _dayOfMonth;
+  bool _useMonthWeekday = false;
+  int? _monthOrdinal;
+  int? _monthWeekday;
   RepeatEnd _end = RepeatEnd.never;
   DateTime? _endDate;
   int? _endCount;
   final _endCountController = TextEditingController();
 
   static const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _ordinalLabels = ['First', 'Second', 'Third', 'Fourth', 'Last'];
 
   @override
   void initState() {
@@ -39,11 +43,18 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
       _freq = r.freq;
       if (r.days != null) _days.addAll(r.days!);
       _dayOfMonth = r.dayOfMonth;
+      if (r.monthOrdinal != null && r.monthWeekday != null) {
+        _useMonthWeekday = true;
+        _monthOrdinal = r.monthOrdinal;
+        _monthWeekday = r.monthWeekday;
+      }
       _end = r.end;
       _endDate = r.endDate;
       _endCount = r.endCount;
       if (r.endCount != null) _endCountController.text = r.endCount.toString();
     }
+    if (_monthOrdinal == null) _monthOrdinal = 1;
+    if (_monthWeekday == null) _monthWeekday = 1;
   }
 
   @override
@@ -55,10 +66,13 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
   RepeatRule? _buildRule() {
     if (_freq == null) return null;
     final count = _end == RepeatEnd.after ? (int.tryParse(_endCountController.text) ?? _endCount ?? 1) : null;
+    final bool useWeekday = _freq == 'M' && _useMonthWeekday && _monthOrdinal != null && _monthWeekday != null;
     return RepeatRule(
       freq: _freq,
       days: _freq == 'W' && _days.isNotEmpty ? (List<int>.from(_days)..sort()) : null,
-      dayOfMonth: _freq == 'M' ? (_dayOfMonth ?? 1) : null,
+      dayOfMonth: _freq == 'M' && !useWeekday ? (_dayOfMonth ?? 1) : null,
+      monthOrdinal: useWeekday ? _monthOrdinal : null,
+      monthWeekday: useWeekday ? _monthWeekday : null,
       end: _end,
       endDate: _end == RepeatEnd.until ? _endDate : null,
       endCount: count,
@@ -135,22 +149,62 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
                     ],
                     if (_freq == 'M') ...[
                       const SizedBox(height: 20),
-                      Text('Day of month', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text('Monthly repeat on', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<int>(
-                        value: _dayOfMonth ?? 1,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: colorScheme.surfaceContainerHighest,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        items: [
-                          const DropdownMenuItem(value: 0, child: Text('First day of month')),
-                          const DropdownMenuItem(value: 32, child: Text('Last day of month')),
-                          ...List.generate(31, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1}'))),
+                      SegmentedButton<bool>(
+                        segments: [
+                          ButtonSegment(value: false, label: const Text('Day of month')),
+                          ButtonSegment(value: true, label: const Text('Weekday of month')),
                         ],
-                        onChanged: (v) => setState(() => _dayOfMonth = v),
+                        selected: {_useMonthWeekday},
+                        onSelectionChanged: (v) => setState(() => _useMonthWeekday = v.first),
                       ),
+                      const SizedBox(height: 12),
+                      if (!_useMonthWeekday)
+                        DropdownButtonFormField<int>(
+                          value: _dayOfMonth ?? 1,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: colorScheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: 0, child: Text('First day of month')),
+                            const DropdownMenuItem(value: 32, child: Text('Last day of month')),
+                            ...List.generate(31, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1}'))),
+                          ],
+                          onChanged: (v) => setState(() => _dayOfMonth = v),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<int>(
+                                value: (_monthOrdinal ?? 1).clamp(1, 5),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: colorScheme.surfaceContainerHighest,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: List.generate(5, (i) => DropdownMenuItem(value: i + 1, child: Text(_ordinalLabels[i]))),
+                                onChanged: (v) => setState(() => _monthOrdinal = v),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<int>(
+                                value: (_monthWeekday ?? 1).clamp(1, 7),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: colorScheme.surfaceContainerHighest,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: List.generate(7, (i) => DropdownMenuItem(value: i + 1, child: Text(_weekdayLabels[i]))),
+                                onChanged: (v) => setState(() => _monthWeekday = v),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                     const SizedBox(height: 20),
                     Text('Ends', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),

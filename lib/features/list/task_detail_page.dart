@@ -92,11 +92,18 @@ class TaskDetailPage extends StatelessWidget {
       }
       return;
     }
+    final task = await db.getTaskById(taskId);
+    final title = task?.title ?? 'this task';
+    final isRepeating = task != null && task.rrule != null && task.rrule!.isNotEmpty;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete task?'),
-        content: const Text('This cannot be undone.'),
+        content: Text(
+          isRepeating
+              ? 'Delete "$title"? This is a repeating task. This occurrence will be removed and no future occurrences will be created. This cannot be undone.'
+              : 'Permanently delete "$title"? This cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
@@ -175,6 +182,29 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     await widget.db.updateTaskById(widget.task.id, TasksCompanion(rrule: Value(rrule)));
   }
 
+  Future<void> _saveDeadline(DateTime? deadline) async {
+    await widget.db.updateTaskById(widget.task.id, TasksCompanion(deadline: Value(deadline)));
+  }
+
+  Future<void> _pickDeadline() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: widget.task.deadline ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (!mounted || date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: widget.task.deadline != null
+          ? TimeOfDay(hour: widget.task.deadline!.hour, minute: widget.task.deadline!.minute)
+          : TimeOfDay.now(),
+    );
+    if (!mounted || time == null) return;
+    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    await _saveDeadline(combined);
+  }
+
   Future<void> _onSubtaskToggle(BuildContext context, Task t) async {
     if (t.isCompleted) {
       await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(false), completedAt: Value(null)));
@@ -211,19 +241,30 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             ),
             onSubmitted: (_) => _saveTitle(),
           ),
-          if (widget.task.deadline != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.schedule, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Text(
-                  'Due ${DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)}',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text('Due date', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.task.deadline != null
+                      ? DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)
+                      : 'Not set',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
                 ),
-              ],
-            ),
-          ],
+              ),
+              TextButton(
+                onPressed: _pickDeadline,
+                child: const Text('Edit'),
+              ),
+              if (widget.task.deadline != null)
+                TextButton(
+                  onPressed: () => _saveDeadline(null),
+                  child: const Text('Clear'),
+                ),
+            ],
+          ),
           const SizedBox(height: 16),
           Text(
             'Description',
@@ -365,11 +406,16 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       }
       return;
     }
+    final isRepeating = t.rrule != null && t.rrule!.isNotEmpty;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete subtask?'),
-        content: Text('Delete "${t.title}"?'),
+        content: Text(
+          isRepeating
+              ? 'Delete "${t.title}"? This repeating subtask will be removed and no future occurrences will be created. This cannot be undone.'
+              : 'Permanently delete "${t.title}"? This cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
