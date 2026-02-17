@@ -377,29 +377,42 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: _spaceBlock),
-                // Due date row (value as pill with icon when set)
+                // Due date row (tap value to edit)
                 _ScheduleRow(
                   label: 'Due date',
-                  valueWidget: widget.task.deadline != null
-                      ? _DueDatePill(
-                          dateTime: widget.task.deadline!,
-                          colorScheme: colorScheme,
-                        )
-                      : Text('Not set', style: TextStyle(color: colorScheme.onSurface, fontSize: 15)),
+                  valueWidget: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _pickDeadline,
+                      borderRadius: BorderRadius.circular(12),
+                      child: widget.task.deadline != null
+                          ? _DueDatePill(
+                              dateTime: widget.task.deadline!,
+                              colorScheme: colorScheme,
+                            )
+                          : _ScheduleButton(
+                              colorScheme: colorScheme,
+                              child: Text(
+                                'Not set',
+                                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                    ),
+                  ),
                   colorScheme: colorScheme,
                   minTouchTarget: _minTouchTarget,
-                  actions: [
-                    _ScheduleIconButton(icon: Icons.edit_outlined, onPressed: _pickDeadline, colorScheme: colorScheme),
-                    if (widget.task.deadline != null)
-                      _ScheduleIconButton(icon: Icons.close, onPressed: () => _saveDeadline(null), colorScheme: colorScheme),
-                  ],
+                  actions: const [],
                 ),
                   // Reminders only when due date is set
                   if (widget.task.deadline != null) ...[
                     const SizedBox(height: _spaceRow),
                     Text(
                       'Reminders',
-                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant.withOpacity(0.85),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Builder(
@@ -441,31 +454,35 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                 const SizedBox(height: _spaceRow),
                 _ScheduleRow(
                   label: 'Repeat',
-                  valueWidget: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.repeat, size: 18, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Text(
-                        RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
-                        style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                  colorScheme: colorScheme,
-                  minTouchTarget: _minTouchTarget,
-                  actions: [
-                    _ScheduleIconButton(
-                      icon: Icons.edit_outlined,
-                      onPressed: () async {
+                  valueWidget: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () async {
                         final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
                         if (!context.mounted) return;
                         final value = rule?.toStorage();
                         await _saveRepeat(value == null || value.isEmpty ? null : value);
                       },
-                      colorScheme: colorScheme,
+                      borderRadius: BorderRadius.circular(12),
+                      child: _ScheduleButton(
+                        colorScheme: colorScheme,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.repeat, size: 16, color: colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 8),
+                            Text(
+                              RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
+                              style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ],
+                  ),
+                  colorScheme: colorScheme,
+                  minTouchTarget: _minTouchTarget,
+                  actions: const [],
                 ),
               ],
             ),
@@ -633,9 +650,9 @@ class _ScheduleRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurfaceVariant.withOpacity(0.9),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -646,14 +663,37 @@ class _ScheduleRow extends StatelessWidget {
             style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
           ),
         ),
-        const SizedBox(width: 8),
-        ...actions.expand((w) => [w, const SizedBox(width: 8)]).toList()..removeLast(),
+        if (actions.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          ...actions.expand((w) => [w, const SizedBox(width: 8)]).toList()..removeLast(),
+        ],
       ],
     );
   }
 }
 
-/// Rounded pill showing calendar icon + date and time on two lines so both are fully visible.
+/// Button-style container for schedule row values (due date, repeat).
+class _ScheduleButton extends StatelessWidget {
+  final ColorScheme colorScheme;
+  final Widget child;
+
+  const _ScheduleButton({required this.colorScheme, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.4), width: 1.5),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Due date in a button-style box (tap to edit).
 class _DueDatePill extends StatelessWidget {
   final DateTime dateTime;
   final ColorScheme colorScheme;
@@ -662,37 +702,19 @@ class _DueDatePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateText = DateFormat('MMM d, yyyy').format(dateTime);
-    final timeText = DateFormat('h:mm a').format(dateTime);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    final text = DateFormat('MMM d, yy · h:mm a').format(dateTime);
+    return _ScheduleButton(
+      colorScheme: colorScheme,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(Icons.calendar_today_outlined, size: 18, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
+          Icon(Icons.calendar_today_outlined, size: 16, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  dateText,
-                  style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.left,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  timeText,
-                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-                  textAlign: TextAlign.left,
-                ),
-              ],
+            child: Text(
+              text,
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -726,8 +748,9 @@ class _SectionCard extends StatelessWidget {
               title,
               style: TextStyle(
                 color: colorScheme.onSurface,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
               ),
             ),
             child,
