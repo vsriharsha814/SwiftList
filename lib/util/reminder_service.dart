@@ -1,19 +1,20 @@
 import 'dart:convert';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_10y.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter_timezone/flutter_timezone.dart';
 
 /// Reminder offsets in minutes: 10 min, 30 min, 1 hr, 1 day before.
 const List<int> kReminderOptions = [10, 30, 60, 1440];
 
-/// Labels for reminder options (short for one-line layout).
+/// Labels for reminder options (compact: 10m, 30m, 1h, 1d).
 const Map<int, String> kReminderLabels = {
-  10: '10 min',
-  30: '30 min',
-  60: '1 hr',
-  1440: '1 day',
+  10: '10m',
+  30: '30m',
+  60: '1h',
+  1440: '1d',
 };
 
 /// Parse reminder minutes from task.reminderMinutesBefore (JSON array string).
@@ -68,15 +69,36 @@ int _notificationId(String taskId, int minutesBefore) {
 const String _channelId = 'task_reminders';
 const String _channelName = 'Task reminders';
 
+String _reminderBody(int minutes) {
+  if (minutes >= 1440) return 'Due in 1 day';
+  if (minutes >= 60) return 'Due in ${minutes ~/ 60} hr';
+  return 'Due in $minutes min';
+}
+
+/// Request notification permission if not already granted (required for Android 13+ and iOS).
+Future<bool> _requestNotificationPermission() async {
+  final status = await Permission.notification.status;
+  if (status.isGranted) return true;
+  if (status.isDenied) {
+    final result = await Permission.notification.request();
+    return result.isGranted;
+  }
+  return false;
+}
+
 /// Schedules reminder notifications for a task. Call when task has deadline and reminderMinutesBefore set.
 /// Cancels any existing reminders for this task first, then schedules new ones.
-Future<void> scheduleTaskReminders({
+/// Requests notification permission if needed before scheduling.
+/// Returns false if permission was denied (caller can show "Enable notifications to get reminders").
+Future<bool> scheduleTaskReminders({
   required String taskId,
   required String title,
   required DateTime deadline,
   required List<int> minutesBefore,
 }) async {
-  if (minutesBefore.isEmpty || deadline.isBefore(DateTime.now())) return;
+  if (minutesBefore.isEmpty || deadline.isBefore(DateTime.now())) return true;
+  final granted = await _requestNotificationPermission();
+  if (!granted) return false;
   await _ensureTimezone();
   final plugin = await _getPlugin();
   await cancelTaskReminders(taskId);
@@ -84,8 +106,8 @@ Future<void> scheduleTaskReminders({
   const androidDetails = AndroidNotificationDetails(
     _channelId,
     _channelName,
-    importance: Importance.defaultImportance,
-    priority: Priority.defaultPriority,
+    importance: Importance.high,
+    priority: Priority.high,
   );
   const iosDetails = IOSNotificationDetails();
   const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -98,7 +120,7 @@ Future<void> scheduleTaskReminders({
     await plugin.zonedSchedule(
       id,
       'Reminder: $title',
-      'Due in $minutes min',
+      _reminderBody(minutes),
       remindAt,
       details,
       androidAllowWhileIdle: true,
@@ -106,6 +128,7 @@ Future<void> scheduleTaskReminders({
           UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
+  return true;
 }
 
 /// Cancels all scheduled reminders for a task.

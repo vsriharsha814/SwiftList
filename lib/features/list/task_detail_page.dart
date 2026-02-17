@@ -185,18 +185,29 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   Future<void> _saveDeadline(DateTime? deadline) async {
-    await widget.db.updateTaskById(widget.task.id, TasksCompanion(deadline: Value(deadline)));
+    await widget.db.updateTaskById(
+      widget.task.id,
+      TasksCompanion(
+        deadline: Value(deadline),
+        reminderMinutesBefore: deadline == null ? const Value(null) : const Value.absent(),
+      ),
+    );
     if (deadline == null) {
       await cancelTaskReminders(widget.task.id);
     } else {
       final minutes = parseReminderMinutes(widget.task.reminderMinutesBefore);
       if (minutes.isNotEmpty) {
-        await scheduleTaskReminders(
+        final ok = await scheduleTaskReminders(
           taskId: widget.task.id,
           title: widget.task.title,
           deadline: deadline,
           minutesBefore: minutes,
         );
+        if (mounted && !ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Enable notifications in Settings to get reminders')),
+          );
+        }
       }
     }
   }
@@ -208,12 +219,17 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       TasksCompanion(reminderMinutesBefore: Value(json)),
     );
     if (widget.task.deadline != null && minutes.isNotEmpty) {
-      await scheduleTaskReminders(
+      final ok = await scheduleTaskReminders(
         taskId: widget.task.id,
         title: widget.task.title,
         deadline: widget.task.deadline!,
         minutesBefore: minutes,
       );
+      if (mounted && !ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enable notifications in Settings to get reminders')),
+        );
+      }
     } else {
       await cancelTaskReminders(widget.task.id);
     }
@@ -252,167 +268,203 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
         final newId = await widget.db.insertNextRecurrence(t, next);
         final reminderMins = parseReminderMinutes(t.reminderMinutesBefore);
         if (reminderMins.isNotEmpty) {
-          await scheduleTaskReminders(taskId: newId, title: t.title, deadline: next, minutesBefore: reminderMins);
+          final ok = await scheduleTaskReminders(taskId: newId, title: t.title, deadline: next, minutesBefore: reminderMins);
+          if (mounted && !ok) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Enable notifications in Settings to get reminders')),
+            );
+          }
         }
       }
     }
   }
 
+  static const double _spaceSection = 32;
+  static const double _spaceBlock = 24;
+  static const double _spaceRow = 16;
+  static const double _minTouchTarget = 44;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // —— Title (bold, primary hierarchy) ——
           TextField(
             controller: _titleController,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
             ),
             decoration: InputDecoration(
               hintText: 'Task title',
-              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
               border: InputBorder.none,
               isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
             ),
             onSubmitted: (_) => _saveTitle(),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text('Due date', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.task.deadline != null
-                      ? DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)
-                      : 'Not set',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
-                ),
-              ),
-              TextButton(
-                onPressed: _pickDeadline,
-                child: const Text('Edit'),
-              ),
-              if (widget.task.deadline != null)
-                TextButton(
-                  onPressed: () => _saveDeadline(null),
-                  child: const Text('Clear'),
-                ),
-            ],
-          ),
-          if (widget.task.deadline != null) ...[
-            const SizedBox(height: 12),
-            Text('Reminders', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Builder(
-              builder: (context) {
-                final now = DateTime.now();
-                final minutesUntilDeadline = widget.task.deadline!.difference(now).inMinutes;
-                final relevantOptions = kReminderOptions.where((minutes) => minutesUntilDeadline >= minutes).toList();
-                if (relevantOptions.isEmpty) {
-                  return Text(
-                    'Due too soon for reminders',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                  );
-                }
-                return Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: relevantOptions.map((minutes) {
-                    final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
-                    final label = kReminderLabels[minutes] ?? '${minutes}m';
-                    return FilterChip(
-                      label: Text(label, style: TextStyle(fontSize: 12, color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
-                      selected: selected,
-                      onSelected: (v) async {
-                        final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
-                        if (v) current.add(minutes); else current.remove(minutes);
-                        await _saveReminders(current.toList()..sort());
-                      },
-                      selectedColor: Theme.of(context).colorScheme.primary,
-                      checkmarkColor: Theme.of(context).colorScheme.onPrimary,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                      visualDensity: VisualDensity.compact,
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-          const SizedBox(height: 16),
+          const SizedBox(height: _spaceSection),
+          // —— Description ——
           Text(
             'Description',
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 12,
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           TextField(
             controller: _descController,
             maxLines: 4,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16),
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
             decoration: InputDecoration(
               hintText: 'Add a description...',
-              hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
               filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              fillColor: colorScheme.surfaceContainerHighest,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
             onSubmitted: (_) => _saveDescription(),
           ),
           if (_titleDirty || _descDirty)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextButton(
+              padding: const EdgeInsets.only(top: 12),
+              child: FilledButton.tonal(
                 onPressed: () async {
                   await _saveTitle();
                   await _saveDescription();
                 },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(_minTouchTarget),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                ),
                 child: const Text('Save changes'),
               ),
             ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Text('Repeat', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
-                ),
+          const SizedBox(height: _spaceSection),
+          // —— Time & Schedule card ——
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Time & Schedule',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: _spaceBlock),
+                  // Due date row
+                  _ScheduleRow(
+                    label: 'Due date',
+                    value: widget.task.deadline != null
+                        ? DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)
+                        : 'Not set',
+                    colorScheme: colorScheme,
+                    minTouchTarget: _minTouchTarget,
+                    actions: [
+                      _ScheduleIconButton(icon: Icons.edit_outlined, onPressed: _pickDeadline, colorScheme: colorScheme),
+                      if (widget.task.deadline != null)
+                        _ScheduleIconButton(icon: Icons.close, onPressed: () => _saveDeadline(null), colorScheme: colorScheme),
+                    ],
+                  ),
+                  // Reminders only when due date is set
+                  if (widget.task.deadline != null) ...[
+                    const SizedBox(height: _spaceRow),
+                    Text(
+                      'Reminders',
+                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Builder(
+                      builder: (context) {
+                        final now = DateTime.now();
+                        final minutesUntilDeadline = widget.task.deadline!.difference(now).inMinutes;
+                        final relevantOptions = kReminderOptions.where((minutes) => minutesUntilDeadline >= minutes).toList();
+                        if (relevantOptions.isEmpty) {
+                          return Text(
+                            'Due too soon for reminders',
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+                          );
+                        }
+                        return Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: relevantOptions.map((minutes) {
+                            final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
+                            final label = kReminderLabels[minutes] ?? '${minutes}m';
+                            return FilterChip(
+                              label: Text(label, style: TextStyle(fontSize: 12, color: selected ? colorScheme.onPrimary : colorScheme.onSurface)),
+                              selected: selected,
+                              onSelected: (v) async {
+                                final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
+                                if (v) current.add(minutes); else current.remove(minutes);
+                                await _saveReminders(current.toList()..sort());
+                              },
+                              selectedColor: AppColors.actionAccent,
+                              checkmarkColor: colorScheme.onPrimary,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: _spaceRow),
+                  ],
+                  const SizedBox(height: _spaceRow),
+                  _ScheduleRow(
+                    label: 'Repeat',
+                    value: RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
+                    colorScheme: colorScheme,
+                    minTouchTarget: _minTouchTarget,
+                    actions: [
+                      _ScheduleIconButton(
+                        icon: Icons.edit_outlined,
+                        onPressed: () async {
+                          final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
+                          if (!context.mounted) return;
+                          final value = rule?.toStorage();
+                          await _saveRepeat(value == null || value.isEmpty ? null : value);
+                        },
+                        colorScheme: colorScheme,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () async {
-                  final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
-                  if (!context.mounted) return;
-                  final value = rule?.toStorage();
-                  await _saveRepeat(value == null || value.isEmpty ? null : value);
-                },
-                child: const Text('Edit'),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: _spaceSection),
           Row(
             children: [
               Text(
                 'Subtasks',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: colorScheme.onSurface,
                   fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(width: 8),
@@ -423,15 +475,15 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   final completed = list.where((t) => t.isCompleted).length;
                   if (list.isEmpty) return const SizedBox.shrink();
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '$completed/${list.length}',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: colorScheme.onSurfaceVariant,
                         fontSize: 13,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
@@ -441,7 +493,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           StreamBuilder<List<Task>>(
             stream: widget.db.watchChildrenOf(widget.task.id),
             builder: (context, snapshot) {
@@ -508,6 +560,74 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     );
     if (!context.mounted) return;
     if (ok == true) await widget.db.deleteTaskAndDependencies(t.id);
+  }
+}
+
+/// One row in the Time & Schedule card: label, value, and action chips.
+class _ScheduleRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final ColorScheme colorScheme;
+  final double minTouchTarget;
+  final List<Widget> actions;
+
+  const _ScheduleRow({
+    required this.label,
+    required this.value,
+    required this.colorScheme,
+    required this.minTouchTarget,
+    required this.actions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 88,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ...actions.expand((w) => [w, const SizedBox(width: 8)]).toList()..removeLast(),
+      ],
+    );
+  }
+}
+
+/// Small icon-only action for schedule rows (edit pencil, clear X).
+class _ScheduleIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  final ColorScheme colorScheme;
+
+  const _ScheduleIconButton({required this.icon, required this.onPressed, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        foregroundColor: colorScheme.onSurfaceVariant,
+        minimumSize: const Size(32, 32),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
   }
 }
 

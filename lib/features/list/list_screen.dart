@@ -693,6 +693,7 @@ class _ListScreenState extends State<ListScreen> {
         final reminderMins = parseReminderMinutes(task.reminderMinutesBefore);
         if (reminderMins.isNotEmpty) {
           await scheduleTaskReminders(taskId: newId, title: task.title, deadline: next, minutesBefore: reminderMins);
+          // Permission denied is non-fatal; user can enable in Settings
         }
       }
     }
