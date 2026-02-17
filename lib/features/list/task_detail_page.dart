@@ -12,6 +12,8 @@ import 'package:to_do_flutter_app/util/reminder_service.dart';
 class TaskDetailPage extends StatelessWidget {
   const TaskDetailPage({super.key, required this.taskId});
 
+  static final GlobalKey<_TaskDetailContentState> _contentKey = GlobalKey<_TaskDetailContentState>();
+
   final String taskId;
 
   @override
@@ -19,7 +21,7 @@ class TaskDetailPage extends StatelessWidget {
     final db = context.read<AppDatabase>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task'),
+        title: const Text('Task Details'),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -37,12 +39,13 @@ class TaskDetailPage extends StatelessWidget {
           if (task == null) {
             return const Center(child: Text('Task not found'));
           }
-          return _TaskDetailContent(task: task, db: db);
+          return _TaskDetailContent(key: _contentKey, task: task, db: db);
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddSubtask(context, db),
-        child: const Icon(Icons.add),
+        onPressed: () => _contentKey.currentState?.saveChanges(),
+        backgroundColor: AppColors.actionAccent,
+        child: const Icon(Icons.check, color: Colors.white),
       ),
     );
   }
@@ -128,7 +131,7 @@ class _TaskDetailContent extends StatefulWidget {
   final Task task;
   final AppDatabase db;
 
-  const _TaskDetailContent({required this.task, required this.db});
+  const _TaskDetailContent({super.key, required this.task, required this.db});
 
   @override
   State<_TaskDetailContent> createState() => _TaskDetailContentState();
@@ -137,14 +140,22 @@ class _TaskDetailContent extends StatefulWidget {
 class _TaskDetailContentState extends State<_TaskDetailContent> {
   late TextEditingController _titleController;
   late TextEditingController _descController;
+  late TextEditingController _addSubtaskController;
   bool _titleDirty = false;
   bool _descDirty = false;
+
+  /// Called by the FAB to persist title and description.
+  void saveChanges() {
+    _saveTitle();
+    _saveDescription();
+  }
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.task.title);
     _descController = TextEditingController(text: widget.task.description ?? '');
+    _addSubtaskController = TextEditingController();
     _titleController.addListener(() => setState(() => _titleDirty = true));
     _descController.addListener(() => setState(() => _descDirty = true));
   }
@@ -164,7 +175,22 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
+    _addSubtaskController.dispose();
     super.dispose();
+  }
+
+  Future<void> _addSubtaskInline() async {
+    final title = _addSubtaskController.text.trim();
+    if (title.isEmpty) return;
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    await widget.db.insertTask(TasksCompanion(
+      id: Value(id),
+      title: Value(title),
+      parentId: Value(widget.task.id),
+      createdAt: Value(DateTime.now()),
+    ));
+    _addSubtaskController.clear();
+    setState(() {});
   }
 
   Future<void> _saveTitle() async {
@@ -293,102 +319,81 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // —— Title (bold, primary hierarchy) ——
-          TextField(
-            controller: _titleController,
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Task title',
-              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            onSubmitted: (_) => _saveTitle(),
-          ),
-          const SizedBox(height: _spaceSection),
-          // —— Description ——
-          Text(
-            'Description',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _descController,
-            maxLines: 4,
-            style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
-            decoration: InputDecoration(
-              hintText: 'Add a description...',
-              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            ),
-            onSubmitted: (_) => _saveDescription(),
-          ),
-          if (_titleDirty || _descDirty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: FilledButton.tonal(
-                onPressed: () async {
-                  await _saveTitle();
-                  await _saveDescription();
-                },
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(_minTouchTarget),
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+          // —— Task Details card ——
+          _SectionCard(
+            title: 'Task Details',
+            colorScheme: colorScheme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _titleController,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'New Task Title',
+                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  onSubmitted: (_) => _saveTitle(),
                 ),
-                child: const Text('Save changes'),
-              ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _descController,
+                  maxLines: 3,
+                  style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Add a description...',
+                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  onSubmitted: (_) => _saveDescription(),
+                ),
+              ],
             ),
+          ),
           const SizedBox(height: _spaceSection),
           // —— Time & Schedule card ——
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Time & Schedule',
-                    style: TextStyle(
-                      color: colorScheme.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: _spaceBlock),
-                  // Due date row
-                  _ScheduleRow(
-                    label: 'Due date',
-                    value: widget.task.deadline != null
-                        ? DateFormat('MMM d, yyyy · h:mm a').format(widget.task.deadline!)
-                        : 'Not set',
-                    colorScheme: colorScheme,
-                    minTouchTarget: _minTouchTarget,
-                    actions: [
-                      _ScheduleIconButton(icon: Icons.edit_outlined, onPressed: _pickDeadline, colorScheme: colorScheme),
-                      if (widget.task.deadline != null)
-                        _ScheduleIconButton(icon: Icons.close, onPressed: () => _saveDeadline(null), colorScheme: colorScheme),
-                    ],
-                  ),
+          _SectionCard(
+            title: 'Time & Schedule',
+            colorScheme: colorScheme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: _spaceBlock),
+                // Due date row (value as pill with icon when set)
+                _ScheduleRow(
+                  label: 'Due date',
+                  valueWidget: widget.task.deadline != null
+                      ? _DueDatePill(
+                          dateTime: widget.task.deadline!,
+                          colorScheme: colorScheme,
+                        )
+                      : Text('Not set', style: TextStyle(color: colorScheme.onSurface, fontSize: 15)),
+                  colorScheme: colorScheme,
+                  minTouchTarget: _minTouchTarget,
+                  actions: [
+                    _ScheduleIconButton(icon: Icons.edit_outlined, onPressed: _pickDeadline, colorScheme: colorScheme),
+                    if (widget.task.deadline != null)
+                      _ScheduleIconButton(icon: Icons.close, onPressed: () => _saveDeadline(null), colorScheme: colorScheme),
+                  ],
+                ),
                   // Reminders only when due date is set
                   if (widget.task.deadline != null) ...[
                     const SizedBox(height: _spaceRow),
@@ -433,95 +438,130 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                     ),
                     const SizedBox(height: _spaceRow),
                   ],
-                  const SizedBox(height: _spaceRow),
-                  _ScheduleRow(
-                    label: 'Repeat',
-                    value: RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
-                    colorScheme: colorScheme,
-                    minTouchTarget: _minTouchTarget,
-                    actions: [
-                      _ScheduleIconButton(
-                        icon: Icons.edit_outlined,
-                        onPressed: () async {
-                          final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
-                          if (!context.mounted) return;
-                          final value = rule?.toStorage();
-                          await _saveRepeat(value == null || value.isEmpty ? null : value);
-                        },
-                        colorScheme: colorScheme,
+                const SizedBox(height: _spaceRow),
+                _ScheduleRow(
+                  label: 'Repeat',
+                  valueWidget: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.repeat, size: 18, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Text(
+                        RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
+                        style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
                       ),
                     ],
                   ),
-                ],
-              ),
+                  colorScheme: colorScheme,
+                  minTouchTarget: _minTouchTarget,
+                  actions: [
+                    _ScheduleIconButton(
+                      icon: Icons.edit_outlined,
+                      onPressed: () async {
+                        final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
+                        if (!context.mounted) return;
+                        final value = rule?.toStorage();
+                        await _saveRepeat(value == null || value.isEmpty ? null : value);
+                      },
+                      colorScheme: colorScheme,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           const SizedBox(height: _spaceSection),
-          Row(
-            children: [
-              Text(
-                'Subtasks',
-                style: TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 8),
-              StreamBuilder<List<Task>>(
-                stream: widget.db.watchChildrenOf(widget.task.id),
-                builder: (context, snap) {
-                  final list = snap.data ?? [];
-                  final completed = list.where((t) => t.isCompleted).length;
-                  if (list.isEmpty) return const SizedBox.shrink();
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$completed/${list.length}',
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 13,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+          _SectionCard(
+            title: 'Subtasks',
+            colorScheme: colorScheme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _addSubtaskController,
+                        decoration: InputDecoration(
+                          hintText: 'Add a subtask...',
+                          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                        onSubmitted: (_) => _addSubtaskInline(),
                       ),
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder<List<Task>>(
-            stream: widget.db.watchChildrenOf(widget.task.id),
-            builder: (context, snapshot) {
-              final subtasks = snapshot.data ?? [];
-              if (subtasks.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'No subtasks yet. Tap + to add one.',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
-                  ),
-                );
-              }
-              return Column(
-                children: subtasks.map((t) => _SubtaskTile(
-                  task: t,
-                  parentTitle: widget.task.title,
-                  onToggle: () => _onSubtaskToggle(context, t),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TaskDetailPage(taskId: t.id),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _addSubtaskInline,
+                      icon: const Icon(Icons.add, size: 22),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.actionAccent,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
-                  ),
-                  onDelete: () => _deleteSubtask(context, t),
-                )).toList(),
-              );
-            },
+                  ],
+                ),
+                const SizedBox(height: 16),
+                StreamBuilder<List<Task>>(
+                  stream: widget.db.watchChildrenOf(widget.task.id),
+                  builder: (context, snap) {
+                    final list = snap.data ?? [];
+                    final completed = list.where((t) => t.isCompleted).length;
+                    if (list.isNotEmpty) {
+                      return Container(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          '$completed/${list.length}',
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+                StreamBuilder<List<Task>>(
+                  stream: widget.db.watchChildrenOf(widget.task.id),
+                  builder: (context, snapshot) {
+                    final subtasks = snapshot.data ?? [];
+                    if (subtasks.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No subtasks yet.',
+                          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: subtasks.map((t) => _SubtaskTile(
+                        task: t,
+                        parentTitle: widget.task.title,
+                        onToggle: () => _onSubtaskToggle(context, t),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TaskDetailPage(taskId: t.id),
+                          ),
+                        ),
+                        onDelete: () => _deleteSubtask(context, t),
+                      )).toList(),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -563,47 +603,137 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 }
 
-/// One row in the Time & Schedule card: label, value, and action chips.
+/// One row in the Time & Schedule card: label, value or valueWidget, and actions.
 class _ScheduleRow extends StatelessWidget {
   final String label;
-  final String value;
+  final String? value;
+  final Widget? valueWidget;
   final ColorScheme colorScheme;
   final double minTouchTarget;
   final List<Widget> actions;
 
   const _ScheduleRow({
     required this.label,
-    required this.value,
+    this.value,
+    this.valueWidget,
     required this.colorScheme,
     required this.minTouchTarget,
     required this.actions,
-  });
+  }) : assert(value != null || valueWidget != null);
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: 88,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
         Expanded(
-          child: Text(
-            value,
+          child: valueWidget ?? Text(
+            value!,
             style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
           ),
         ),
         const SizedBox(width: 8),
         ...actions.expand((w) => [w, const SizedBox(width: 8)]).toList()..removeLast(),
       ],
+    );
+  }
+}
+
+/// Rounded pill showing calendar icon + date and time on two lines so both are fully visible.
+class _DueDatePill extends StatelessWidget {
+  final DateTime dateTime;
+  final ColorScheme colorScheme;
+
+  const _DueDatePill({required this.dateTime, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateText = DateFormat('MMM d, yyyy').format(dateTime);
+    final timeText = DateFormat('h:mm a').format(dateTime);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  dateText,
+                  style: TextStyle(color: colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.left,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  timeText,
+                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                  textAlign: TextAlign.left,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Section card with title (Task Details, Time & Schedule, Subtasks).
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final ColorScheme colorScheme;
+  final Widget child;
+
+  const _SectionCard({required this.title, required this.colorScheme, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            child,
+          ],
+        ),
+      ),
     );
   }
 }
@@ -676,10 +806,20 @@ class _SubtaskTile extends StatelessWidget {
             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
           ),
         ),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline, size: 22),
-          onPressed: onDelete,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (task.deadline != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(Icons.schedule_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 22),
+              onPressed: onDelete,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ],
         ),
         onTap: onTap,
       ),
