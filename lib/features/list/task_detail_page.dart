@@ -308,27 +308,40 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             const SizedBox(height: 12),
             Text('Reminders', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: kReminderOptions.map((minutes) {
-                final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
-                final label = kReminderLabels[minutes] ?? '${minutes}m';
-                return FilterChip(
-                  label: Text(label, style: TextStyle(fontSize: 12, color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
-                  selected: selected,
-                  onSelected: (v) async {
-                    final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
-                    if (v) current.add(minutes); else current.remove(minutes);
-                    await _saveReminders(current.toList()..sort());
-                  },
-                  selectedColor: Theme.of(context).colorScheme.primary,
-                  checkmarkColor: Theme.of(context).colorScheme.onPrimary,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                  visualDensity: VisualDensity.compact,
+            Builder(
+              builder: (context) {
+                final now = DateTime.now();
+                final minutesUntilDeadline = widget.task.deadline!.difference(now).inMinutes;
+                final relevantOptions = kReminderOptions.where((minutes) => minutesUntilDeadline >= minutes).toList();
+                if (relevantOptions.isEmpty) {
+                  return Text(
+                    'Due too soon for reminders',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                  );
+                }
+                return Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: relevantOptions.map((minutes) {
+                    final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
+                    final label = kReminderLabels[minutes] ?? '${minutes}m';
+                    return FilterChip(
+                      label: Text(label, style: TextStyle(fontSize: 12, color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
+                      selected: selected,
+                      onSelected: (v) async {
+                        final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
+                        if (v) current.add(minutes); else current.remove(minutes);
+                        await _saveReminders(current.toList()..sort());
+                      },
+                      selectedColor: Theme.of(context).colorScheme.primary,
+                      checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      visualDensity: VisualDensity.compact,
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
             const SizedBox(height: 16),
           ],
