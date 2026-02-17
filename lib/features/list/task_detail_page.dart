@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
+import 'package:to_do_flutter_app/features/list/repeat_editor_sheet.dart';
+import 'package:to_do_flutter_app/util/repeat_rule.dart';
 
 /// Task detail: title, description, and subtasks. Subtasks added here appear on the main list.
 class TaskDetailPage extends StatelessWidget {
@@ -175,27 +177,15 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
 
   Future<void> _onSubtaskToggle(BuildContext context, Task t) async {
     if (t.isCompleted) {
-      await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(false)));
+      await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(false), completedAt: Value(null)));
       return;
     }
-    await widget.db.updateTaskById(t.id, const TasksCompanion(isCompleted: Value(true)));
+    final now = DateTime.now();
+    await widget.db.updateTaskById(t.id, TasksCompanion(isCompleted: const Value(true), completedAt: Value(now)));
     if (t.rrule != null && t.rrule!.isNotEmpty) {
-      final now = DateTime.now();
-      DateTime next = t.deadline != null && t.deadline!.isAfter(now) ? t.deadline! : now;
-      switch (t.rrule!) {
-        case 'DAILY':
-          next = next.add(const Duration(days: 1));
-          break;
-        case 'WEEKLY':
-          next = next.add(const Duration(days: 7));
-          break;
-        case 'MONTHLY':
-          next = DateTime(next.year, next.month + 1, next.day, next.hour, next.minute);
-          break;
-        default:
-          next = next.add(const Duration(days: 1));
-      }
-      await widget.db.insertNextRecurrence(t, next);
+      final from = t.deadline != null && t.deadline!.isAfter(now) ? t.deadline! : now;
+      final next = getNextOccurrenceFromRrule(t.rrule, from);
+      if (next != null) await widget.db.insertNextRecurrence(t, next);
     }
   }
 
@@ -272,15 +262,25 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               ),
             ),
           const SizedBox(height: 20),
-          Text('Repeat', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
+          Row(
             children: [
-              _RepeatChip(label: 'None', value: null, current: widget.task.rrule, onTap: () => _saveRepeat(null)),
-              _RepeatChip(label: 'Daily', value: 'DAILY', current: widget.task.rrule, onTap: () => _saveRepeat('DAILY')),
-              _RepeatChip(label: 'Weekly', value: 'WEEKLY', current: widget.task.rrule, onTap: () => _saveRepeat('WEEKLY')),
-              _RepeatChip(label: 'Monthly', value: 'MONTHLY', current: widget.task.rrule, onTap: () => _saveRepeat('MONTHLY')),
+              Text('Repeat', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  RepeatRule.parse(widget.task.rrule)?.toSummary() ?? 'None',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final rule = await showRepeatEditorSheet(context, initial: RepeatRule.parse(widget.task.rrule));
+                  if (!context.mounted) return;
+                  final value = rule?.toStorage();
+                  await _saveRepeat(value == null || value.isEmpty ? null : value);
+                },
+                child: const Text('Edit'),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -452,11 +452,20 @@ class _RepeatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = current == value;
+    final colorScheme = Theme.of(context).colorScheme;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+      selectedColor: colorScheme.primary,
+      checkmarkColor: colorScheme.onPrimary,
+      side: BorderSide(color: selected ? colorScheme.primary : colorScheme.outline),
     );
   }
 }

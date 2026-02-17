@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
+import 'package:to_do_flutter_app/util/repeat_rule.dart';
 import 'package:to_do_flutter_app/features/list/task_detail_page.dart';
 import 'package:to_do_flutter_app/pages/settings_page.dart';
 
@@ -87,6 +88,21 @@ class _ListScreenState extends State<ListScreen> {
     return sorted;
   }
 
+  /// Incomplete first (by createdAt), then completed at bottom in order they were checked off (completedAt ascending).
+  static List<Task> sortIncompleteFirstThenCompletedByCheckedOff(List<Task> tasks) {
+    final sorted = List<Task>.from(tasks);
+    sorted.sort((a, b) {
+      if (!a.isCompleted && b.isCompleted) return -1;
+      if (a.isCompleted && !b.isCompleted) return 1;
+      if (!a.isCompleted && !b.isCompleted) return a.createdAt.compareTo(b.createdAt);
+      // Both completed: by completedAt (null = treat as oldest, so first)
+      final aAt = a.completedAt ?? DateTime(0);
+      final bAt = b.completedAt ?? DateTime(0);
+      return aAt.compareTo(bAt);
+    });
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
@@ -115,13 +131,18 @@ class _ListScreenState extends State<ListScreen> {
                       )
                     : null,
         actions: [
-          if (_selectionMode)
+          if (_selectionMode) ...[
+            IconButton(
+              icon: Icon(_showingArchive ? Icons.unarchive_outlined : Icons.archive_outlined),
+              tooltip: _showingArchive ? 'Unarchive selected' : 'Archive selected',
+              onPressed: () => _showingArchive ? _unarchiveSelectedTasks(context, db) : _archiveSelectedTasks(context, db),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete selected',
               onPressed: () => _deleteSelectedTasks(context, db),
-            )
-          else ...[
+            ),
+          ] else ...[
             IconButton(
               icon: Icon(_showingArchive ? Icons.inbox_outlined : Icons.archive_outlined),
               tooltip: _showingArchive ? 'Back to tasks' : 'View archive',
@@ -159,27 +180,27 @@ class _ListScreenState extends State<ListScreen> {
                 }()
               : rawTasks;
           final showingArchive = _showingArchive;
-          // Main page hides completed roots and completed subtasks; drill-down shows all including archived.
+          // Main list: show all non-archived tasks (completed stay visible until user archives). Archive view: show archived only.
           final displayTasks = showingArchive
-                  ? tasks.where((t) => t.isCompleted).toList()
+                  ? tasks.where((t) => t.isArchived).toList()
                   : () {
                       if (_currentParentId != null) {
-                        return tasks; // drill-down: show all children including archived
+                        return tasks.where((t) => !t.isArchived).toList();
                       }
                       final visibleRootIds = tasks
-                          .where((t) => t.parentId == null && !t.isCompleted)
+                          .where((t) => t.parentId == null && !t.isArchived)
                           .map((t) => t.id)
                           .toSet();
                       return tasks
                           .where((t) =>
                               t.parentId == null
-                                  ? !t.isCompleted
-                                  : visibleRootIds.contains(t.parentId) && !t.isCompleted)
+                                  ? !t.isArchived
+                                  : visibleRootIds.contains(t.parentId) && !t.isArchived)
                           .toList();
                     }();
-              final sortedTasks = sortByDateAdded(displayTasks);
-              // Progress only counts active (non-archived) tasks; hidden when viewing archive.
-              final activeTasks = tasks.where((t) => !t.isCompleted).toList();
+              final sortedTasks = sortIncompleteFirstThenCompletedByCheckedOff(displayTasks);
+              // Progress: incomplete, non-archived tasks only.
+              final activeTasks = tasks.where((t) => !t.isCompleted && !t.isArchived).toList();
               final progress = !showingArchive && activeTasks.isNotEmpty
                   ? weightedProgress(activeTasks)
                   : 0.0;
@@ -213,12 +234,6 @@ class _ListScreenState extends State<ListScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  if (!showingArchive)
-                    _QuickAddBar(
-                      controller: _quickAddController,
-                      hintText: _currentParentId == null ? 'Add a task...' : 'Add a subtask...',
-                      onAdd: () => _quickAddTask(db),
                     ),
                   if (showingArchive && displayTasks.isNotEmpty)
                     Padding(
@@ -256,10 +271,10 @@ class _ListScreenState extends State<ListScreen> {
                                   showingArchive
                                       ? 'No archived tasks'
                                       : tasks.isNotEmpty
-                                          ? 'All tasks are done and archived'
+                                          ? 'All tasks are archived'
                                           : _currentParentId == null
-                                              ? 'Type above to add a task'
-                                              : 'Type above to add a subtask',
+                                              ? 'Type below to add a task'
+                                              : 'Type below to add a subtask',
                                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8), fontSize: 14),
                                 ),
                               ],
@@ -306,14 +321,7 @@ class _ListScreenState extends State<ListScreen> {
                                             : null,
                                     onToggleComplete: () async {
                                       if (task.isCompleted) {
-                                        await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false)));
-                                      } else {
-                                        await _markTaskComplete(context, db, task);
-                                      }
-                                    },
-                                    onArchive: () async {
-                                      if (task.isCompleted) {
-                                        await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false)));
+                                        await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(false), completedAt: Value(null)));
                                       } else {
                                         await _markTaskComplete(context, db, task);
                                       }
@@ -330,6 +338,12 @@ class _ListScreenState extends State<ListScreen> {
                             },
                           ),
                   ),
+                  if (!showingArchive)
+                    _QuickAddBar(
+                      controller: _quickAddController,
+                      hintText: _currentParentId == null ? 'Add a task...' : 'Add a subtask...',
+                      onAdd: () => _quickAddTask(db),
+                    ),
                 ],
               );
         },
@@ -366,6 +380,34 @@ class _ListScreenState extends State<ListScreen> {
       _currentParentId = newParentId;
       _parentTitle = newParent?.title;
     });
+  }
+
+  Future<void> _archiveSelectedTasks(BuildContext context, AppDatabase db) async {
+    if (_selectedTaskIds.isEmpty) return;
+    final count = _selectedTaskIds.length;
+    for (final id in _selectedTaskIds) {
+      await db.updateTaskById(id, const TasksCompanion(isArchived: Value(true)));
+    }
+    setState(() => _selectedTaskIds.clear());
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(count == 1 ? 'Task archived' : '$count tasks archived')),
+      );
+    }
+  }
+
+  Future<void> _unarchiveSelectedTasks(BuildContext context, AppDatabase db) async {
+    if (_selectedTaskIds.isEmpty) return;
+    final count = _selectedTaskIds.length;
+    for (final id in _selectedTaskIds) {
+      await db.updateTaskById(id, const TasksCompanion(isArchived: Value(false)));
+    }
+    setState(() => _selectedTaskIds.clear());
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(count == 1 ? 'Task restored' : '$count tasks restored')),
+      );
+    }
   }
 
   Future<void> _deleteSelectedTasks(BuildContext context, AppDatabase db) async {
@@ -496,11 +538,19 @@ class _ListScreenState extends State<ListScreen> {
                       spacing: 8,
                       children: _repeatOptions.entries.map((e) {
                         final isSelected = selectedRepeat == e.value;
+                        final colorScheme = Theme.of(context).colorScheme;
                         return ChoiceChip(
-                          label: Text(e.key),
+                          label: Text(
+                            e.key,
+                            style: TextStyle(
+                              color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                          ),
                           selected: isSelected,
                           onSelected: (_) => setDialogState(() => selectedRepeat = e.value),
-                          selectedColor: AppColors.actionAccent.withOpacity(0.3),
+                          selectedColor: colorScheme.primary,
+                          checkmarkColor: colorScheme.onPrimary,
                         );
                       }).toList(),
                     ),
@@ -593,26 +643,12 @@ class _ListScreenState extends State<ListScreen> {
 
   /// Marks task complete and spawns next if recurring.
   Future<void> _markTaskComplete(BuildContext context, AppDatabase db, Task task) async {
-    await db.updateTaskById(task.id, const TasksCompanion(isCompleted: Value(true)));
+    final now = DateTime.now();
+    await db.updateTaskById(task.id, TasksCompanion(isCompleted: const Value(true), completedAt: Value(now)));
     if (task.rrule != null && task.rrule!.isNotEmpty) {
-      final now = DateTime.now();
-      DateTime next = task.deadline != null && task.deadline!.isAfter(now)
-          ? task.deadline!
-          : now;
-      switch (task.rrule!) {
-        case 'DAILY':
-          next = next.add(const Duration(days: 1));
-          break;
-        case 'WEEKLY':
-          next = next.add(const Duration(days: 7));
-          break;
-        case 'MONTHLY':
-          next = DateTime(next.year, next.month + 1, next.day, next.hour, next.minute);
-          break;
-        default:
-          next = next.add(const Duration(days: 1));
-      }
-      await db.insertNextRecurrence(task, next);
+      final from = task.deadline != null && task.deadline!.isAfter(now) ? task.deadline! : now;
+      final next = getNextOccurrenceFromRrule(task.rrule, from);
+      if (next != null) await db.insertNextRecurrence(task, next);
     }
   }
 }
@@ -623,7 +659,6 @@ class _TaskCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDrillDown;
   final VoidCallback onToggleComplete;
-  final VoidCallback onArchive;
   final bool? hasChildren;
   final int? subtaskCompleted;
   final int? subtaskTotal;
@@ -637,7 +672,6 @@ class _TaskCard extends StatelessWidget {
     required this.onTap,
     this.onDrillDown,
     required this.onToggleComplete,
-    required this.onArchive,
     this.hasChildren,
     this.subtaskCompleted,
     this.subtaskTotal,
@@ -768,7 +802,7 @@ class _TaskCard extends StatelessWidget {
                           Icon(Icons.repeat, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           const SizedBox(width: 4),
                           Text(
-                            'Repeats ${task.rrule!.toLowerCase()}',
+                            'Repeats ${RepeatRule.parse(task.rrule)?.toSummary() ?? task.rrule!.toLowerCase()}',
                             style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                           ),
                         ],
@@ -782,15 +816,6 @@ class _TaskCard extends StatelessWidget {
                   value: isSelected,
                   onChanged: (_) => onTap(),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                )
-              else
-                IconButton(
-                  icon: Icon(
-                    task.isCompleted ? Icons.unarchive_outlined : Icons.archive_outlined,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  onPressed: onArchive,
-                  tooltip: task.isCompleted ? 'Unarchive' : 'Archive',
                 ),
             ],
           ),

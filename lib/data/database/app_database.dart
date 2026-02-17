@@ -17,6 +17,8 @@ class Tasks extends Table {
   DateTimeColumn get deadline => dateTime().nullable()();
   IntColumn get weight => integer().withDefault(const Constant(1))();
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get completedAt => dateTime().nullable()();
   TextColumn get projectName => text().nullable()();
   IntColumn get countdownMinutes => integer().nullable()(); // Pomodoro default e.g. 25
   DateTimeColumn get createdAt => dateTime()();
@@ -64,7 +66,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,6 +76,12 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 3) {
             await migrator.createTable(completionLogs);
+          }
+          if (from < 4) {
+            await migrator.addColumn(tasks, tasks.isArchived);
+          }
+          if (from < 5) {
+            await migrator.addColumn(tasks, tasks.completedAt);
           }
         },
       );

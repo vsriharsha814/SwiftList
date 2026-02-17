@@ -61,6 +61,22 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'CHECK ("is_completed" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _isArchivedMeta =
+      const VerificationMeta('isArchived');
+  @override
+  late final GeneratedColumn<bool> isArchived = GeneratedColumn<bool>(
+      'is_archived', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_archived" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _completedAtMeta =
+      const VerificationMeta('completedAt');
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+      'completed_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   static const VerificationMeta _projectNameMeta =
       const VerificationMeta('projectName');
   @override
@@ -89,6 +105,8 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         deadline,
         weight,
         isCompleted,
+        isArchived,
+        completedAt,
         projectName,
         countdownMinutes,
         createdAt
@@ -142,6 +160,18 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
           isCompleted.isAcceptableOrUnknown(
               data['is_completed']!, _isCompletedMeta));
     }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+          _isArchivedMeta,
+          isArchived.isAcceptableOrUnknown(
+              data['is_archived']!, _isArchivedMeta));
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+          _completedAtMeta,
+          completedAt.isAcceptableOrUnknown(
+              data['completed_at']!, _completedAtMeta));
+    }
     if (data.containsKey('project_name')) {
       context.handle(
           _projectNameMeta,
@@ -185,6 +215,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
           .read(DriftSqlType.int, data['${effectivePrefix}weight'])!,
       isCompleted: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_completed'])!,
+      isArchived: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_archived'])!,
+      completedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}completed_at']),
       projectName: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}project_name']),
       countdownMinutes: attachedDatabase.typeMapping
@@ -209,6 +243,8 @@ class Task extends DataClass implements Insertable<Task> {
   final DateTime? deadline;
   final int weight;
   final bool isCompleted;
+  final bool isArchived;
+  final DateTime? completedAt;
   final String? projectName;
   final int? countdownMinutes;
   final DateTime createdAt;
@@ -221,6 +257,8 @@ class Task extends DataClass implements Insertable<Task> {
       this.deadline,
       required this.weight,
       required this.isCompleted,
+      required this.isArchived,
+      this.completedAt,
       this.projectName,
       this.countdownMinutes,
       required this.createdAt});
@@ -243,6 +281,10 @@ class Task extends DataClass implements Insertable<Task> {
     }
     map['weight'] = Variable<int>(weight);
     map['is_completed'] = Variable<bool>(isCompleted);
+    map['is_archived'] = Variable<bool>(isArchived);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
     if (!nullToAbsent || projectName != null) {
       map['project_name'] = Variable<String>(projectName);
     }
@@ -270,6 +312,10 @@ class Task extends DataClass implements Insertable<Task> {
           : Value(deadline),
       weight: Value(weight),
       isCompleted: Value(isCompleted),
+      isArchived: Value(isArchived),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
       projectName: projectName == null && nullToAbsent
           ? const Value.absent()
           : Value(projectName),
@@ -292,6 +338,8 @@ class Task extends DataClass implements Insertable<Task> {
       deadline: serializer.fromJson<DateTime?>(json['deadline']),
       weight: serializer.fromJson<int>(json['weight']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
+      isArchived: serializer.fromJson<bool>(json['isArchived']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
       projectName: serializer.fromJson<String?>(json['projectName']),
       countdownMinutes: serializer.fromJson<int?>(json['countdownMinutes']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -309,6 +357,8 @@ class Task extends DataClass implements Insertable<Task> {
       'deadline': serializer.toJson<DateTime?>(deadline),
       'weight': serializer.toJson<int>(weight),
       'isCompleted': serializer.toJson<bool>(isCompleted),
+      'isArchived': serializer.toJson<bool>(isArchived),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
       'projectName': serializer.toJson<String?>(projectName),
       'countdownMinutes': serializer.toJson<int?>(countdownMinutes),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -324,6 +374,8 @@ class Task extends DataClass implements Insertable<Task> {
           Value<DateTime?> deadline = const Value.absent(),
           int? weight,
           bool? isCompleted,
+          bool? isArchived,
+          Value<DateTime?> completedAt = const Value.absent(),
           Value<String?> projectName = const Value.absent(),
           Value<int?> countdownMinutes = const Value.absent(),
           DateTime? createdAt}) =>
@@ -336,6 +388,8 @@ class Task extends DataClass implements Insertable<Task> {
         deadline: deadline.present ? deadline.value : this.deadline,
         weight: weight ?? this.weight,
         isCompleted: isCompleted ?? this.isCompleted,
+        isArchived: isArchived ?? this.isArchived,
+        completedAt: completedAt.present ? completedAt.value : this.completedAt,
         projectName: projectName.present ? projectName.value : this.projectName,
         countdownMinutes: countdownMinutes.present
             ? countdownMinutes.value
@@ -354,6 +408,10 @@ class Task extends DataClass implements Insertable<Task> {
       weight: data.weight.present ? data.weight.value : this.weight,
       isCompleted:
           data.isCompleted.present ? data.isCompleted.value : this.isCompleted,
+      isArchived:
+          data.isArchived.present ? data.isArchived.value : this.isArchived,
+      completedAt:
+          data.completedAt.present ? data.completedAt.value : this.completedAt,
       projectName:
           data.projectName.present ? data.projectName.value : this.projectName,
       countdownMinutes: data.countdownMinutes.present
@@ -374,6 +432,8 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('deadline: $deadline, ')
           ..write('weight: $weight, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('completedAt: $completedAt, ')
           ..write('projectName: $projectName, ')
           ..write('countdownMinutes: $countdownMinutes, ')
           ..write('createdAt: $createdAt')
@@ -382,8 +442,20 @@ class Task extends DataClass implements Insertable<Task> {
   }
 
   @override
-  int get hashCode => Object.hash(id, parentId, title, description, rrule,
-      deadline, weight, isCompleted, projectName, countdownMinutes, createdAt);
+  int get hashCode => Object.hash(
+      id,
+      parentId,
+      title,
+      description,
+      rrule,
+      deadline,
+      weight,
+      isCompleted,
+      isArchived,
+      completedAt,
+      projectName,
+      countdownMinutes,
+      createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -396,6 +468,8 @@ class Task extends DataClass implements Insertable<Task> {
           other.deadline == this.deadline &&
           other.weight == this.weight &&
           other.isCompleted == this.isCompleted &&
+          other.isArchived == this.isArchived &&
+          other.completedAt == this.completedAt &&
           other.projectName == this.projectName &&
           other.countdownMinutes == this.countdownMinutes &&
           other.createdAt == this.createdAt);
@@ -410,6 +484,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<DateTime?> deadline;
   final Value<int> weight;
   final Value<bool> isCompleted;
+  final Value<bool> isArchived;
+  final Value<DateTime?> completedAt;
   final Value<String?> projectName;
   final Value<int?> countdownMinutes;
   final Value<DateTime> createdAt;
@@ -423,6 +499,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.deadline = const Value.absent(),
     this.weight = const Value.absent(),
     this.isCompleted = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.completedAt = const Value.absent(),
     this.projectName = const Value.absent(),
     this.countdownMinutes = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -437,6 +515,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.deadline = const Value.absent(),
     this.weight = const Value.absent(),
     this.isCompleted = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.completedAt = const Value.absent(),
     this.projectName = const Value.absent(),
     this.countdownMinutes = const Value.absent(),
     required DateTime createdAt,
@@ -453,6 +533,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<DateTime>? deadline,
     Expression<int>? weight,
     Expression<bool>? isCompleted,
+    Expression<bool>? isArchived,
+    Expression<DateTime>? completedAt,
     Expression<String>? projectName,
     Expression<int>? countdownMinutes,
     Expression<DateTime>? createdAt,
@@ -467,6 +549,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (deadline != null) 'deadline': deadline,
       if (weight != null) 'weight': weight,
       if (isCompleted != null) 'is_completed': isCompleted,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (completedAt != null) 'completed_at': completedAt,
       if (projectName != null) 'project_name': projectName,
       if (countdownMinutes != null) 'countdown_minutes': countdownMinutes,
       if (createdAt != null) 'created_at': createdAt,
@@ -483,6 +567,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       Value<DateTime?>? deadline,
       Value<int>? weight,
       Value<bool>? isCompleted,
+      Value<bool>? isArchived,
+      Value<DateTime?>? completedAt,
       Value<String?>? projectName,
       Value<int?>? countdownMinutes,
       Value<DateTime>? createdAt,
@@ -496,6 +582,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       deadline: deadline ?? this.deadline,
       weight: weight ?? this.weight,
       isCompleted: isCompleted ?? this.isCompleted,
+      isArchived: isArchived ?? this.isArchived,
+      completedAt: completedAt ?? this.completedAt,
       projectName: projectName ?? this.projectName,
       countdownMinutes: countdownMinutes ?? this.countdownMinutes,
       createdAt: createdAt ?? this.createdAt,
@@ -530,6 +618,12 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (isCompleted.present) {
       map['is_completed'] = Variable<bool>(isCompleted.value);
     }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<bool>(isArchived.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
     if (projectName.present) {
       map['project_name'] = Variable<String>(projectName.value);
     }
@@ -556,6 +650,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('deadline: $deadline, ')
           ..write('weight: $weight, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('completedAt: $completedAt, ')
           ..write('projectName: $projectName, ')
           ..write('countdownMinutes: $countdownMinutes, ')
           ..write('createdAt: $createdAt, ')
@@ -1450,6 +1546,8 @@ typedef $$TasksTableCreateCompanionBuilder = TasksCompanion Function({
   Value<DateTime?> deadline,
   Value<int> weight,
   Value<bool> isCompleted,
+  Value<bool> isArchived,
+  Value<DateTime?> completedAt,
   Value<String?> projectName,
   Value<int?> countdownMinutes,
   required DateTime createdAt,
@@ -1464,6 +1562,8 @@ typedef $$TasksTableUpdateCompanionBuilder = TasksCompanion Function({
   Value<DateTime?> deadline,
   Value<int> weight,
   Value<bool> isCompleted,
+  Value<bool> isArchived,
+  Value<DateTime?> completedAt,
   Value<String?> projectName,
   Value<int?> countdownMinutes,
   Value<DateTime> createdAt,
@@ -1544,6 +1644,12 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isArchived => $composableBuilder(
+      column: $table.isArchived, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get projectName => $composableBuilder(
       column: $table.projectName, builder: (column) => ColumnFilters(column));
@@ -1648,6 +1754,12 @@ class $$TasksTableOrderingComposer
   ColumnOrderings<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isArchived => $composableBuilder(
+      column: $table.isArchived, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get projectName => $composableBuilder(
       column: $table.projectName, builder: (column) => ColumnOrderings(column));
 
@@ -1708,6 +1820,12 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<bool> get isCompleted => $composableBuilder(
       column: $table.isCompleted, builder: (column) => column);
+
+  GeneratedColumn<bool> get isArchived => $composableBuilder(
+      column: $table.isArchived, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+      column: $table.completedAt, builder: (column) => column);
 
   GeneratedColumn<String> get projectName => $composableBuilder(
       column: $table.projectName, builder: (column) => column);
@@ -1813,6 +1931,8 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<DateTime?> deadline = const Value.absent(),
             Value<int> weight = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
+            Value<bool> isArchived = const Value.absent(),
+            Value<DateTime?> completedAt = const Value.absent(),
             Value<String?> projectName = const Value.absent(),
             Value<int?> countdownMinutes = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
@@ -1827,6 +1947,8 @@ class $$TasksTableTableManager extends RootTableManager<
             deadline: deadline,
             weight: weight,
             isCompleted: isCompleted,
+            isArchived: isArchived,
+            completedAt: completedAt,
             projectName: projectName,
             countdownMinutes: countdownMinutes,
             createdAt: createdAt,
@@ -1841,6 +1963,8 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<DateTime?> deadline = const Value.absent(),
             Value<int> weight = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
+            Value<bool> isArchived = const Value.absent(),
+            Value<DateTime?> completedAt = const Value.absent(),
             Value<String?> projectName = const Value.absent(),
             Value<int?> countdownMinutes = const Value.absent(),
             required DateTime createdAt,
@@ -1855,6 +1979,8 @@ class $$TasksTableTableManager extends RootTableManager<
             deadline: deadline,
             weight: weight,
             isCompleted: isCompleted,
+            isArchived: isArchived,
+            completedAt: completedAt,
             projectName: projectName,
             countdownMinutes: countdownMinutes,
             createdAt: createdAt,
