@@ -18,6 +18,7 @@ dependencies:
   # Notifications & scheduling
   flutter_local_notifications: ^9.9.1
   timezone: ^0.8.0
+  flutter_timezone: ^2.0.0
   workmanager: ^0.5.2
   # Timer foreground service (Android)
   flutter_foreground_task: ^8.15.0

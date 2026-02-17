@@ -15,6 +15,8 @@ class Tasks extends Table {
   TextColumn get description => text().nullable()();
   TextColumn get rrule => text().nullable()();
   DateTimeColumn get deadline => dateTime().nullable()();
+  /// JSON array of minutes before deadline to remind, e.g. "[10,30,60,1440]" for 10min, 30min, 1hr, 1day.
+  TextColumn get reminderMinutesBefore => text().nullable()();
   IntColumn get weight => integer().withDefault(const Constant(1))();
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
@@ -66,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -82,6 +84,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 5) {
             await migrator.addColumn(tasks, tasks.completedAt);
+          }
+          if (from < 6) {
+            await migrator.addColumn(tasks, tasks.reminderMinutesBefore);
           }
         },
       );
@@ -156,7 +161,8 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Inserts the next occurrence for a recurring task (call after completing one).
-  Future<void> insertNextRecurrence(Task completed, DateTime nextDeadline) async {
+  /// Returns the new task id so callers can schedule reminders.
+  Future<String> insertNextRecurrence(Task completed, DateTime nextDeadline) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     await into(tasks).insert(TasksCompanion(
       id: Value(id),
@@ -165,8 +171,10 @@ class AppDatabase extends _$AppDatabase {
       parentId: Value(completed.parentId),
       rrule: Value(completed.rrule),
       deadline: Value(nextDeadline),
+      reminderMinutesBefore: Value(completed.reminderMinutesBefore),
       createdAt: Value(DateTime.now()),
     ));
+    return id;
   }
 
   // --- Completion logs (for Pulse) ---

@@ -44,6 +44,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
   late final GeneratedColumn<DateTime> deadline = GeneratedColumn<DateTime>(
       'deadline', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _reminderMinutesBeforeMeta =
+      const VerificationMeta('reminderMinutesBefore');
+  @override
+  late final GeneratedColumn<String> reminderMinutesBefore =
+      GeneratedColumn<String>('reminder_minutes_before', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _weightMeta = const VerificationMeta('weight');
   @override
   late final GeneratedColumn<int> weight = GeneratedColumn<int>(
@@ -103,6 +109,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         description,
         rrule,
         deadline,
+        reminderMinutesBefore,
         weight,
         isCompleted,
         isArchived,
@@ -149,6 +156,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     if (data.containsKey('deadline')) {
       context.handle(_deadlineMeta,
           deadline.isAcceptableOrUnknown(data['deadline']!, _deadlineMeta));
+    }
+    if (data.containsKey('reminder_minutes_before')) {
+      context.handle(
+          _reminderMinutesBeforeMeta,
+          reminderMinutesBefore.isAcceptableOrUnknown(
+              data['reminder_minutes_before']!, _reminderMinutesBeforeMeta));
     }
     if (data.containsKey('weight')) {
       context.handle(_weightMeta,
@@ -211,6 +224,9 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
           .read(DriftSqlType.string, data['${effectivePrefix}rrule']),
       deadline: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}deadline']),
+      reminderMinutesBefore: attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}reminder_minutes_before']),
       weight: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}weight'])!,
       isCompleted: attachedDatabase.typeMapping
@@ -241,6 +257,9 @@ class Task extends DataClass implements Insertable<Task> {
   final String? description;
   final String? rrule;
   final DateTime? deadline;
+
+  /// JSON array of minutes before deadline to remind, e.g. "[10,30,60,1440]" for 10min, 30min, 1hr, 1day.
+  final String? reminderMinutesBefore;
   final int weight;
   final bool isCompleted;
   final bool isArchived;
@@ -255,6 +274,7 @@ class Task extends DataClass implements Insertable<Task> {
       this.description,
       this.rrule,
       this.deadline,
+      this.reminderMinutesBefore,
       required this.weight,
       required this.isCompleted,
       required this.isArchived,
@@ -278,6 +298,9 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || deadline != null) {
       map['deadline'] = Variable<DateTime>(deadline);
+    }
+    if (!nullToAbsent || reminderMinutesBefore != null) {
+      map['reminder_minutes_before'] = Variable<String>(reminderMinutesBefore);
     }
     map['weight'] = Variable<int>(weight);
     map['is_completed'] = Variable<bool>(isCompleted);
@@ -310,6 +333,9 @@ class Task extends DataClass implements Insertable<Task> {
       deadline: deadline == null && nullToAbsent
           ? const Value.absent()
           : Value(deadline),
+      reminderMinutesBefore: reminderMinutesBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reminderMinutesBefore),
       weight: Value(weight),
       isCompleted: Value(isCompleted),
       isArchived: Value(isArchived),
@@ -336,6 +362,8 @@ class Task extends DataClass implements Insertable<Task> {
       description: serializer.fromJson<String?>(json['description']),
       rrule: serializer.fromJson<String?>(json['rrule']),
       deadline: serializer.fromJson<DateTime?>(json['deadline']),
+      reminderMinutesBefore:
+          serializer.fromJson<String?>(json['reminderMinutesBefore']),
       weight: serializer.fromJson<int>(json['weight']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
@@ -355,6 +383,8 @@ class Task extends DataClass implements Insertable<Task> {
       'description': serializer.toJson<String?>(description),
       'rrule': serializer.toJson<String?>(rrule),
       'deadline': serializer.toJson<DateTime?>(deadline),
+      'reminderMinutesBefore':
+          serializer.toJson<String?>(reminderMinutesBefore),
       'weight': serializer.toJson<int>(weight),
       'isCompleted': serializer.toJson<bool>(isCompleted),
       'isArchived': serializer.toJson<bool>(isArchived),
@@ -372,6 +402,7 @@ class Task extends DataClass implements Insertable<Task> {
           Value<String?> description = const Value.absent(),
           Value<String?> rrule = const Value.absent(),
           Value<DateTime?> deadline = const Value.absent(),
+          Value<String?> reminderMinutesBefore = const Value.absent(),
           int? weight,
           bool? isCompleted,
           bool? isArchived,
@@ -386,6 +417,9 @@ class Task extends DataClass implements Insertable<Task> {
         description: description.present ? description.value : this.description,
         rrule: rrule.present ? rrule.value : this.rrule,
         deadline: deadline.present ? deadline.value : this.deadline,
+        reminderMinutesBefore: reminderMinutesBefore.present
+            ? reminderMinutesBefore.value
+            : this.reminderMinutesBefore,
         weight: weight ?? this.weight,
         isCompleted: isCompleted ?? this.isCompleted,
         isArchived: isArchived ?? this.isArchived,
@@ -405,6 +439,9 @@ class Task extends DataClass implements Insertable<Task> {
           data.description.present ? data.description.value : this.description,
       rrule: data.rrule.present ? data.rrule.value : this.rrule,
       deadline: data.deadline.present ? data.deadline.value : this.deadline,
+      reminderMinutesBefore: data.reminderMinutesBefore.present
+          ? data.reminderMinutesBefore.value
+          : this.reminderMinutesBefore,
       weight: data.weight.present ? data.weight.value : this.weight,
       isCompleted:
           data.isCompleted.present ? data.isCompleted.value : this.isCompleted,
@@ -430,6 +467,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('description: $description, ')
           ..write('rrule: $rrule, ')
           ..write('deadline: $deadline, ')
+          ..write('reminderMinutesBefore: $reminderMinutesBefore, ')
           ..write('weight: $weight, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('isArchived: $isArchived, ')
@@ -449,6 +487,7 @@ class Task extends DataClass implements Insertable<Task> {
       description,
       rrule,
       deadline,
+      reminderMinutesBefore,
       weight,
       isCompleted,
       isArchived,
@@ -466,6 +505,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.description == this.description &&
           other.rrule == this.rrule &&
           other.deadline == this.deadline &&
+          other.reminderMinutesBefore == this.reminderMinutesBefore &&
           other.weight == this.weight &&
           other.isCompleted == this.isCompleted &&
           other.isArchived == this.isArchived &&
@@ -482,6 +522,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<String?> description;
   final Value<String?> rrule;
   final Value<DateTime?> deadline;
+  final Value<String?> reminderMinutesBefore;
   final Value<int> weight;
   final Value<bool> isCompleted;
   final Value<bool> isArchived;
@@ -497,6 +538,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.description = const Value.absent(),
     this.rrule = const Value.absent(),
     this.deadline = const Value.absent(),
+    this.reminderMinutesBefore = const Value.absent(),
     this.weight = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.isArchived = const Value.absent(),
@@ -513,6 +555,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.description = const Value.absent(),
     this.rrule = const Value.absent(),
     this.deadline = const Value.absent(),
+    this.reminderMinutesBefore = const Value.absent(),
     this.weight = const Value.absent(),
     this.isCompleted = const Value.absent(),
     this.isArchived = const Value.absent(),
@@ -531,6 +574,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? description,
     Expression<String>? rrule,
     Expression<DateTime>? deadline,
+    Expression<String>? reminderMinutesBefore,
     Expression<int>? weight,
     Expression<bool>? isCompleted,
     Expression<bool>? isArchived,
@@ -547,6 +591,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (description != null) 'description': description,
       if (rrule != null) 'rrule': rrule,
       if (deadline != null) 'deadline': deadline,
+      if (reminderMinutesBefore != null)
+        'reminder_minutes_before': reminderMinutesBefore,
       if (weight != null) 'weight': weight,
       if (isCompleted != null) 'is_completed': isCompleted,
       if (isArchived != null) 'is_archived': isArchived,
@@ -565,6 +611,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       Value<String?>? description,
       Value<String?>? rrule,
       Value<DateTime?>? deadline,
+      Value<String?>? reminderMinutesBefore,
       Value<int>? weight,
       Value<bool>? isCompleted,
       Value<bool>? isArchived,
@@ -580,6 +627,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       description: description ?? this.description,
       rrule: rrule ?? this.rrule,
       deadline: deadline ?? this.deadline,
+      reminderMinutesBefore:
+          reminderMinutesBefore ?? this.reminderMinutesBefore,
       weight: weight ?? this.weight,
       isCompleted: isCompleted ?? this.isCompleted,
       isArchived: isArchived ?? this.isArchived,
@@ -611,6 +660,10 @@ class TasksCompanion extends UpdateCompanion<Task> {
     }
     if (deadline.present) {
       map['deadline'] = Variable<DateTime>(deadline.value);
+    }
+    if (reminderMinutesBefore.present) {
+      map['reminder_minutes_before'] =
+          Variable<String>(reminderMinutesBefore.value);
     }
     if (weight.present) {
       map['weight'] = Variable<int>(weight.value);
@@ -648,6 +701,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('description: $description, ')
           ..write('rrule: $rrule, ')
           ..write('deadline: $deadline, ')
+          ..write('reminderMinutesBefore: $reminderMinutesBefore, ')
           ..write('weight: $weight, ')
           ..write('isCompleted: $isCompleted, ')
           ..write('isArchived: $isArchived, ')
@@ -1544,6 +1598,7 @@ typedef $$TasksTableCreateCompanionBuilder = TasksCompanion Function({
   Value<String?> description,
   Value<String?> rrule,
   Value<DateTime?> deadline,
+  Value<String?> reminderMinutesBefore,
   Value<int> weight,
   Value<bool> isCompleted,
   Value<bool> isArchived,
@@ -1560,6 +1615,7 @@ typedef $$TasksTableUpdateCompanionBuilder = TasksCompanion Function({
   Value<String?> description,
   Value<String?> rrule,
   Value<DateTime?> deadline,
+  Value<String?> reminderMinutesBefore,
   Value<int> weight,
   Value<bool> isCompleted,
   Value<bool> isArchived,
@@ -1638,6 +1694,10 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<DateTime> get deadline => $composableBuilder(
       column: $table.deadline, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get reminderMinutesBefore => $composableBuilder(
+      column: $table.reminderMinutesBefore,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get weight => $composableBuilder(
       column: $table.weight, builder: (column) => ColumnFilters(column));
@@ -1748,6 +1808,10 @@ class $$TasksTableOrderingComposer
   ColumnOrderings<DateTime> get deadline => $composableBuilder(
       column: $table.deadline, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get reminderMinutesBefore => $composableBuilder(
+      column: $table.reminderMinutesBefore,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get weight => $composableBuilder(
       column: $table.weight, builder: (column) => ColumnOrderings(column));
 
@@ -1814,6 +1878,9 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get deadline =>
       $composableBuilder(column: $table.deadline, builder: (column) => column);
+
+  GeneratedColumn<String> get reminderMinutesBefore => $composableBuilder(
+      column: $table.reminderMinutesBefore, builder: (column) => column);
 
   GeneratedColumn<int> get weight =>
       $composableBuilder(column: $table.weight, builder: (column) => column);
@@ -1929,6 +1996,7 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<String?> description = const Value.absent(),
             Value<String?> rrule = const Value.absent(),
             Value<DateTime?> deadline = const Value.absent(),
+            Value<String?> reminderMinutesBefore = const Value.absent(),
             Value<int> weight = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
             Value<bool> isArchived = const Value.absent(),
@@ -1945,6 +2013,7 @@ class $$TasksTableTableManager extends RootTableManager<
             description: description,
             rrule: rrule,
             deadline: deadline,
+            reminderMinutesBefore: reminderMinutesBefore,
             weight: weight,
             isCompleted: isCompleted,
             isArchived: isArchived,
@@ -1961,6 +2030,7 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<String?> description = const Value.absent(),
             Value<String?> rrule = const Value.absent(),
             Value<DateTime?> deadline = const Value.absent(),
+            Value<String?> reminderMinutesBefore = const Value.absent(),
             Value<int> weight = const Value.absent(),
             Value<bool> isCompleted = const Value.absent(),
             Value<bool> isArchived = const Value.absent(),
@@ -1977,6 +2047,7 @@ class $$TasksTableTableManager extends RootTableManager<
             description: description,
             rrule: rrule,
             deadline: deadline,
+            reminderMinutesBefore: reminderMinutesBefore,
             weight: weight,
             isCompleted: isCompleted,
             isArchived: isArchived,

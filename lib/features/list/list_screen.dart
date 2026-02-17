@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
+import 'package:to_do_flutter_app/util/reminder_service.dart';
 import 'package:to_do_flutter_app/util/repeat_rule.dart';
 import 'package:to_do_flutter_app/features/list/task_detail_page.dart';
 import 'package:to_do_flutter_app/pages/settings_page.dart';
@@ -471,6 +472,7 @@ class _ListScreenState extends State<ListScreen> {
       if (children.isNotEmpty) {
         skipped++;
       } else {
+        await cancelTaskReminders(id);
         await db.deleteTaskAndDependencies(id);
         deleted++;
       }
@@ -686,7 +688,13 @@ class _ListScreenState extends State<ListScreen> {
     if (task.rrule != null && task.rrule!.isNotEmpty) {
       final from = task.deadline != null && task.deadline!.isAfter(now) ? task.deadline! : now;
       final next = getNextOccurrenceFromRrule(task.rrule, from);
-      if (next != null) await db.insertNextRecurrence(task, next);
+      if (next != null) {
+        final newId = await db.insertNextRecurrence(task, next);
+        final reminderMins = parseReminderMinutes(task.reminderMinutesBefore);
+        if (reminderMins.isNotEmpty) {
+          await scheduleTaskReminders(taskId: newId, title: task.title, deadline: next, minutesBefore: reminderMins);
+        }
+      }
     }
   }
 }
@@ -884,7 +892,7 @@ class _TaskCard extends StatelessWidget {
   }
 }
 
-class _QuickAddBar extends StatelessWidget {
+class _QuickAddBar extends StatefulWidget {
   final TextEditingController controller;
   final String hintText;
   final VoidCallback onAdd;
@@ -896,8 +904,28 @@ class _QuickAddBar extends StatelessWidget {
   });
 
   @override
+  State<_QuickAddBar> createState() => _QuickAddBarState();
+}
+
+class _QuickAddBarState extends State<_QuickAddBar> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final hasText = widget.controller.text.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -905,10 +933,10 @@ class _QuickAddBar extends StatelessWidget {
         children: [
           Expanded(
             child: TextField(
-              controller: controller,
+              controller: widget.controller,
               autofocus: false,
               decoration: InputDecoration(
-                hintText: hintText,
+                hintText: widget.hintText,
                 hintStyle: TextStyle(
                   color: colorScheme.onSurfaceVariant.withOpacity(0.7),
                   fontSize: 15,
@@ -936,20 +964,26 @@ class _QuickAddBar extends StatelessWidget {
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
-              onSubmitted: (_) => onAdd(),
+              onSubmitted: (_) {
+                if (hasText) widget.onAdd();
+              },
             ),
           ),
           const SizedBox(width: 10),
           Material(
-            color: colorScheme.primary,
+            color: hasText ? colorScheme.primary : colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(20),
             child: InkWell(
-              onTap: onAdd,
+              onTap: hasText ? widget.onAdd : null,
               borderRadius: BorderRadius.circular(20),
               child: SizedBox(
                 width: 40,
                 height: 40,
-                child: Icon(Icons.add, color: colorScheme.onPrimary, size: 24),
+                child: Icon(
+                  Icons.add,
+                  color: hasText ? colorScheme.onPrimary : colorScheme.onSurfaceVariant.withOpacity(0.6),
+                  size: 24,
+                ),
               ),
             ),
           ),

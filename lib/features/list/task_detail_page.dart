@@ -6,6 +6,7 @@ import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/data/database/app_database.dart';
 import 'package:to_do_flutter_app/features/list/repeat_editor_sheet.dart';
 import 'package:to_do_flutter_app/util/repeat_rule.dart';
+import 'package:to_do_flutter_app/util/reminder_service.dart';
 
 /// Task detail: title, description, and subtasks. Subtasks added here appear on the main list.
 class TaskDetailPage extends StatelessWidget {
@@ -116,6 +117,7 @@ class TaskDetailPage extends StatelessWidget {
     );
     if (!context.mounted) return;
     if (confirmed == true) {
+      await cancelTaskReminders(taskId);
       await db.deleteTaskAndDependencies(taskId);
       if (context.mounted) Navigator.pop(context);
     }
@@ -184,6 +186,37 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
 
   Future<void> _saveDeadline(DateTime? deadline) async {
     await widget.db.updateTaskById(widget.task.id, TasksCompanion(deadline: Value(deadline)));
+    if (deadline == null) {
+      await cancelTaskReminders(widget.task.id);
+    } else {
+      final minutes = parseReminderMinutes(widget.task.reminderMinutesBefore);
+      if (minutes.isNotEmpty) {
+        await scheduleTaskReminders(
+          taskId: widget.task.id,
+          title: widget.task.title,
+          deadline: deadline,
+          minutesBefore: minutes,
+        );
+      }
+    }
+  }
+
+  Future<void> _saveReminders(List<int> minutes) async {
+    final json = minutes.isEmpty ? null : serializeReminderMinutes(minutes);
+    await widget.db.updateTaskById(
+      widget.task.id,
+      TasksCompanion(reminderMinutesBefore: Value(json)),
+    );
+    if (widget.task.deadline != null && minutes.isNotEmpty) {
+      await scheduleTaskReminders(
+        taskId: widget.task.id,
+        title: widget.task.title,
+        deadline: widget.task.deadline!,
+        minutesBefore: minutes,
+      );
+    } else {
+      await cancelTaskReminders(widget.task.id);
+    }
   }
 
   Future<void> _pickDeadline() async {
@@ -215,7 +248,13 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     if (t.rrule != null && t.rrule!.isNotEmpty) {
       final from = t.deadline != null && t.deadline!.isAfter(now) ? t.deadline! : now;
       final next = getNextOccurrenceFromRrule(t.rrule, from);
-      if (next != null) await widget.db.insertNextRecurrence(t, next);
+      if (next != null) {
+        final newId = await widget.db.insertNextRecurrence(t, next);
+        final reminderMins = parseReminderMinutes(t.reminderMinutesBefore);
+        if (reminderMins.isNotEmpty) {
+          await scheduleTaskReminders(taskId: newId, title: t.title, deadline: next, minutesBefore: reminderMins);
+        }
+      }
     }
   }
 
@@ -265,6 +304,34 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                 ),
             ],
           ),
+          if (widget.task.deadline != null) ...[
+            const SizedBox(height: 12),
+            Text('Reminders', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: kReminderOptions.map((minutes) {
+                final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
+                final label = kReminderLabels[minutes] ?? '${minutes}m';
+                return FilterChip(
+                  label: Text(label, style: TextStyle(fontSize: 12, color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
+                  selected: selected,
+                  onSelected: (v) async {
+                    final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
+                    if (v) current.add(minutes); else current.remove(minutes);
+                    await _saveReminders(current.toList()..sort());
+                  },
+                  selectedColor: Theme.of(context).colorScheme.primary,
+                  checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  visualDensity: VisualDensity.compact,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
           const SizedBox(height: 16),
           Text(
             'Description',
