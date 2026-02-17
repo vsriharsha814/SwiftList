@@ -403,53 +403,71 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   minTouchTarget: _minTouchTarget,
                   actions: const [],
                 ),
-                  // Reminders only when due date is set
+                  // Reminders only when due date is set (label + chips on one line)
                   if (widget.task.deadline != null) ...[
                     const SizedBox(height: _spaceRow),
-                    Text(
-                      'Reminders',
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant.withOpacity(0.85),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     Builder(
                       builder: (context) {
                         final now = DateTime.now();
                         final minutesUntilDeadline = widget.task.deadline!.difference(now).inMinutes;
-                        final relevantOptions = kReminderOptions.where((minutes) => minutesUntilDeadline >= minutes).toList();
-                        if (relevantOptions.isEmpty) {
-                          return Text(
-                            'Due too soon for reminders',
-                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
-                          );
-                        }
-                        return Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: relevantOptions.map((minutes) {
-                            final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
-                            final label = kReminderLabels[minutes] ?? '${minutes}m';
-                            return FilterChip(
-                              label: Text(label, style: TextStyle(fontSize: 12, color: selected ? colorScheme.onPrimary : colorScheme.onSurface)),
-                              selected: selected,
-                              onSelected: (v) async {
-                                final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
-                                if (v) current.add(minutes); else current.remove(minutes);
-                                await _saveReminders(current.toList()..sort());
-                              },
-                              selectedColor: AppColors.actionAccent,
-                              checkmarkColor: colorScheme.onPrimary,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              visualDensity: VisualDensity.compact,
-                            );
-                          }).toList(),
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 88,
+                              child: Text(
+                                'Reminders',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant.withOpacity(0.85),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: kReminderOptions.map((minutes) {
+                                    final selected = parseReminderMinutes(widget.task.reminderMinutesBefore).contains(minutes);
+                                    final enabled = minutesUntilDeadline >= minutes;
+                                    final label = kReminderLabels[minutes] ?? '${minutes}m';
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: FilterChip(
+                                        label: Text(
+                                          label,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: enabled
+                                                ? (selected ? colorScheme.onPrimary : colorScheme.onSurface)
+                                                : colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                          ),
+                                        ),
+                                        selected: selected,
+                                        onSelected: enabled
+                                            ? (v) async {
+                                                final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
+                                                if (v) current.add(minutes); else current.remove(minutes);
+                                                await _saveReminders(current.toList()..sort());
+                                              }
+                                            : null,
+                                        selectedColor: AppColors.actionAccent,
+                                        showCheckmark: false,
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
-                    const SizedBox(height: _spaceRow),
                   ],
                 const SizedBox(height: _spaceRow),
                 _ScheduleRow(
