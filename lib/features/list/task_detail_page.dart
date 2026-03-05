@@ -136,8 +136,10 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _addSubtaskController;
+  late final ScrollController _scrollController;
   Timer? _titleDebounce;
   Timer? _descDebounce;
+  String _lastSubtaskText = '';
 
   @override
   void initState() {
@@ -145,8 +147,10 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     _titleController = TextEditingController(text: widget.task.title);
     _descController = TextEditingController(text: widget.task.description ?? '');
     _addSubtaskController = TextEditingController();
+     _scrollController = ScrollController();
     _titleController.addListener(_onTitleChanged);
     _descController.addListener(_onDescChanged);
+     _addSubtaskController.addListener(_onSubtaskTextChanged);
   }
 
   @override
@@ -162,6 +166,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   void dispose() {
     _titleDebounce?.cancel();
     _descDebounce?.cancel();
+    _scrollController.dispose();
     _titleController.dispose();
     _descController.dispose();
     _addSubtaskController.dispose();
@@ -176,6 +181,25 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   void _onDescChanged() {
     _descDebounce?.cancel();
     _descDebounce = Timer(const Duration(milliseconds: 500), _saveDescription);
+  }
+
+  void _onSubtaskTextChanged() {
+    final current = _addSubtaskController.text;
+    if (_lastSubtaskText.isEmpty && current.isNotEmpty) {
+      _scrollToSubtasks();
+    }
+    _lastSubtaskText = current;
+  }
+
+  void _scrollToSubtasks() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   Future<void> _addSubtaskInline() async {
@@ -343,6 +367,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -525,105 +550,105 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               ],
             ),
           ),
-          const SizedBox(height: _spaceSection),
-          // Subtasks: no box, matches page background, full width
-          Row(
-            children: [
-              Icon(Icons.checklist_rounded, size: 22, color: AppColors.actionAccent),
-              const SizedBox(width: 10),
-              Text(
-                'Subtasks',
-                style: TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _addSubtaskController,
-                  decoration: InputDecoration(
-                    hintText: 'Add a subtask...',
-                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          // Subtasks: only for root tasks (one level of subtasking)
+          if (widget.task.parentId == null) ...[
+            const SizedBox(height: _spaceSection),
+            Row(
+              children: [
+                Icon(Icons.checklist_rounded, size: 22, color: AppColors.actionAccent),
+                const SizedBox(width: 10),
+                Text(
+                  'Subtasks',
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
                   ),
-                  onSubmitted: (_) => _addSubtaskInline(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: _addSubtaskInline,
-                icon: const Icon(Icons.add, size: 22),
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.actionAccent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          StreamBuilder<List<Task>>(
-            stream: widget.db.watchChildrenOf(widget.task.id),
-            builder: (context, snap) {
-              final list = snap.data ?? [];
-              final completed = list.where((t) => t.isCompleted).length;
-              if (list.isNotEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '$completed/${list.length}',
-                    style: TextStyle(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _addSubtaskController,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: 'Add a subtask...',
+                      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
+                    onSubmitted: (_) => _addSubtaskInline(),
                   ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _addSubtaskInline,
+                  icon: const Icon(Icons.add, size: 22),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.actionAccent,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            StreamBuilder<List<Task>>(
+              stream: widget.db.watchChildrenOf(widget.task.id),
+              builder: (context, snap) {
+                final list = snap.data ?? [];
+                final completed = list.where((t) => t.isCompleted).length;
+                if (list.isNotEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      '$completed/${list.length}',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            StreamBuilder<List<Task>>(
+              stream: widget.db.watchChildrenOf(widget.task.id),
+              builder: (context, snapshot) {
+                final subtasks = snapshot.data ?? [];
+                if (subtasks.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'No subtasks yet.',
+                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                    ),
+                  );
+                }
+                return Column(
+                  children: subtasks.map((t) => _SubtaskTile(
+                    task: t,
+                    parentTitle: widget.task.title,
+                    onToggle: () => _onSubtaskToggle(context, t),
+                    onTap: () => _editSubtaskTitle(t),
+                    onDelete: () => _deleteSubtask(context, t),
+                  )).toList(),
                 );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          StreamBuilder<List<Task>>(
-            stream: widget.db.watchChildrenOf(widget.task.id),
-            builder: (context, snapshot) {
-              final subtasks = snapshot.data ?? [];
-              if (subtasks.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'No subtasks yet.',
-                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-                  ),
-                );
-              }
-              return Column(
-                children: subtasks.map((t) => _SubtaskTile(
-                  task: t,
-                  parentTitle: widget.task.title,
-                  onToggle: () => _onSubtaskToggle(context, t),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TaskDetailPage(taskId: t.id),
-                    ),
-                  ),
-                  onDelete: () => _deleteSubtask(context, t),
-                )).toList(),
-              );
-            },
-          ),
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -661,6 +686,47 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     );
     if (!context.mounted) return;
     if (ok == true) await widget.db.deleteTaskAndDependencies(t.id);
+  }
+
+  Future<void> _editSubtaskTitle(Task subtask) async {
+    final controller = TextEditingController(text: subtask.title);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+          title: const Text('Edit subtask'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: 'Subtask title',
+              labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+            onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    if (newTitle == null) return;
+    final trimmed = newTitle.trim();
+    if (trimmed.isEmpty || trimmed == subtask.title) return;
+    await widget.db.updateTaskById(
+      subtask.id,
+      TasksCompanion(title: Value(trimmed)),
+    );
   }
 }
 
@@ -899,48 +965,81 @@ class _SubtaskTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: SizedBox(
-            width: 28,
-            height: 28,
-            child: Checkbox(
-              value: task.isCompleted,
-              onChanged: (_) => onToggle(),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            ),
-          ),
-          title: Text(
-            task.title,
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-            ),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Subtask of $parentTitle',
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
-            ),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (task.deadline != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Icon(Icons.schedule_outlined, size: 18, color: colorScheme.onSurfaceVariant),
-                ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 22),
-                onPressed: onDelete,
-                color: colorScheme.onSurfaceVariant,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Checkbox(
+                        value: task.isCompleted,
+                        onChanged: (_) => onToggle(),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          task.title,
+                          maxLines: null,
+                          softWrap: true,
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            fontSize: 15,
+                            height: 1.35,
+                            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Subtask of $parentTitle',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (task.deadline != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Icon(Icons.schedule_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 22),
+                        onPressed: onDelete,
+                        color: colorScheme.onSurfaceVariant,
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          onTap: onTap,
         ),
         Divider(height: 1, color: colorScheme.outline.withOpacity(0.2)),
       ],

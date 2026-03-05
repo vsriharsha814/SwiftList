@@ -325,7 +325,7 @@ class _ListScreenState extends State<ListScreen> {
                                             ),
                                     onDrillDown: inSelectionMode
                                         ? null
-                                        : hasChildren
+                                        : (task.parentId == null && hasChildren)
                                             ? () => setState(() {
                                                   _currentParentId = task.id;
                                                   _parentTitle = task.title;
@@ -338,7 +338,7 @@ class _ListScreenState extends State<ListScreen> {
                                         await _markTaskComplete(context, db, task);
                                       }
                                     },
-                                    hasChildren: hasChildren,
+                                    hasChildren: task.parentId == null ? hasChildren : false,
                                     subtaskCompleted: progressInfo?.completed,
                                     subtaskTotal: progressInfo?.total,
                                     isSelectionMode: inSelectionMode,
