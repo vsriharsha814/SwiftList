@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -11,8 +13,6 @@ import 'package:to_do_flutter_app/util/reminder_service.dart';
 /// Task detail: title, description, and subtasks. Subtasks added here appear on the main list.
 class TaskDetailPage extends StatelessWidget {
   const TaskDetailPage({super.key, required this.taskId});
-
-  static final GlobalKey<_TaskDetailContentState> _contentKey = GlobalKey<_TaskDetailContentState>();
 
   final String taskId;
 
@@ -39,13 +39,8 @@ class TaskDetailPage extends StatelessWidget {
           if (task == null) {
             return const Center(child: Text('Task not found'));
           }
-          return _TaskDetailContent(key: _contentKey, task: task, db: db);
+          return _TaskDetailContent(task: task, db: db);
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _contentKey.currentState?.saveChanges(),
-        backgroundColor: AppColors.actionAccent,
-        child: const Icon(Icons.check, color: Colors.white),
       ),
     );
   }
@@ -141,14 +136,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _addSubtaskController;
-  bool _titleDirty = false;
-  bool _descDirty = false;
-
-  /// Called by the FAB to persist title and description.
-  void saveChanges() {
-    _saveTitle();
-    _saveDescription();
-  }
+  Timer? _titleDebounce;
+  Timer? _descDebounce;
 
   @override
   void initState() {
@@ -156,27 +145,37 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     _titleController = TextEditingController(text: widget.task.title);
     _descController = TextEditingController(text: widget.task.description ?? '');
     _addSubtaskController = TextEditingController();
-    _titleController.addListener(() => setState(() => _titleDirty = true));
-    _descController.addListener(() => setState(() => _descDirty = true));
+    _titleController.addListener(_onTitleChanged);
+    _descController.addListener(_onDescChanged);
   }
 
   @override
   void didUpdateWidget(_TaskDetailContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.task.id != widget.task.id ||
-        oldWidget.task.title != widget.task.title ||
-        oldWidget.task.description != widget.task.description) {
-      if (!_titleDirty) _titleController.text = widget.task.title;
-      if (!_descDirty) _descController.text = widget.task.description ?? '';
+    if (oldWidget.task.id != widget.task.id) {
+      _titleController.text = widget.task.title;
+      _descController.text = widget.task.description ?? '';
     }
   }
 
   @override
   void dispose() {
+    _titleDebounce?.cancel();
+    _descDebounce?.cancel();
     _titleController.dispose();
     _descController.dispose();
     _addSubtaskController.dispose();
     super.dispose();
+  }
+
+  void _onTitleChanged() {
+    _titleDebounce?.cancel();
+    _titleDebounce = Timer(const Duration(milliseconds: 500), _saveTitle);
+  }
+
+  void _onDescChanged() {
+    _descDebounce?.cancel();
+    _descDebounce = Timer(const Duration(milliseconds: 500), _saveDescription);
   }
 
   Future<void> _addSubtaskInline() async {
@@ -197,13 +196,11 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
     await widget.db.updateTaskById(widget.task.id, TasksCompanion(title: Value(title)));
-    setState(() => _titleDirty = false);
   }
 
   Future<void> _saveDescription() async {
     final desc = _descController.text.trim();
     await widget.db.updateTaskById(widget.task.id, TasksCompanion(description: Value(desc.isEmpty ? null : desc)));
-    setState(() => _descDirty = false);
   }
 
   Future<void> _saveRepeat(String? rrule) async {
@@ -350,53 +347,40 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // —— Task Details card ——
-          _SectionCard(
-            title: 'Task Details',
-            colorScheme: colorScheme,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _titleController,
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'New Task Title',
-                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                  onSubmitted: (_) => _saveTitle(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _descController,
-                  maxLines: 3,
-                  style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: 'Add a description...',
-                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                  onSubmitted: (_) => _saveDescription(),
-                ),
-              ],
+          // Title: single scrollable line, no box
+          TextField(
+            controller: _titleController,
+            maxLines: 1,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              hintText: 'New task title',
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _descController,
+            maxLines: 3,
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'Add a description...',
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
           const SizedBox(height: _spaceSection),

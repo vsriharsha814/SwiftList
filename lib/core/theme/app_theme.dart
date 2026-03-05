@@ -22,13 +22,13 @@ class AppTheme {
           foregroundColor: AppColors.textPrimary,
           elevation: 0,
           centerTitle: true,
-          titleTextStyle: GoogleFonts.inter(
+          titleTextStyle: GoogleFonts.montserrat(
             fontSize: 20,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
         ),
-        textTheme: GoogleFonts.interTextTheme(
+        textTheme: GoogleFonts.montserratTextTheme(
           ThemeData.dark().textTheme.apply(
                 bodyColor: AppColors.textPrimary,
                 displayColor: AppColors.textPrimary,
@@ -57,8 +57,8 @@ class AppTheme {
             return IconThemeData(color: Colors.white.withOpacity(0.75), opacity: 1.0);
           }),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-            return TextStyle(color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w500);
+            if (states.contains(WidgetState.selected)) return GoogleFonts.montserrat(color: Colors.white, fontWeight: FontWeight.w700);
+            return GoogleFonts.montserrat(color: Colors.white.withOpacity(0.75), fontWeight: FontWeight.w600);
           }),
         ),
         checkboxTheme: CheckboxThemeData(
@@ -82,8 +82,8 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.actionAccent, width: 2),
           ),
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
-          hintStyle: const TextStyle(color: AppColors.textSecondary),
+          labelStyle: GoogleFonts.montserrat(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+          hintStyle: GoogleFonts.montserrat(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
         ),
       );
 
@@ -104,13 +104,13 @@ class AppTheme {
           foregroundColor: AppColors.lightTextPrimary,
           elevation: 0,
           centerTitle: true,
-          titleTextStyle: GoogleFonts.inter(
+          titleTextStyle: GoogleFonts.montserrat(
             fontSize: 20,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: AppColors.lightTextPrimary,
           ),
         ),
-        textTheme: GoogleFonts.interTextTheme(
+        textTheme: GoogleFonts.montserratTextTheme(
           ThemeData.light().textTheme.apply(
                 bodyColor: AppColors.lightTextPrimary,
                 displayColor: AppColors.lightTextPrimary,
@@ -140,8 +140,8 @@ class AppTheme {
             return const IconThemeData(color: AppColors.lightTextSecondary, opacity: 1.0);
           }),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
-            return const TextStyle(color: AppColors.lightTextPrimary, fontWeight: FontWeight.w500);
+            if (states.contains(WidgetState.selected)) return GoogleFonts.montserrat(color: Colors.white, fontWeight: FontWeight.w700);
+            return GoogleFonts.montserrat(color: AppColors.lightTextPrimary, fontWeight: FontWeight.w600);
           }),
         ),
         checkboxTheme: CheckboxThemeData(
@@ -165,15 +165,15 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.actionAccent, width: 2),
           ),
-          labelStyle: const TextStyle(color: AppColors.lightTextSecondary),
-          hintStyle: const TextStyle(color: AppColors.lightTextSecondary),
+          labelStyle: GoogleFonts.montserrat(color: AppColors.lightTextSecondary, fontWeight: FontWeight.w500),
+          hintStyle: GoogleFonts.montserrat(color: AppColors.lightTextSecondary, fontWeight: FontWeight.w500),
         ),
       );
 
   /// Tabular figures for timer so numbers don't jump when they change.
-  static TextStyle timerTextStyle({required bool isDark}) => GoogleFonts.robotoMono(
+  static TextStyle timerTextStyle({required bool isDark}) => GoogleFonts.montserrat(
         fontSize: 48,
-        fontWeight: FontWeight.w300,
+        fontWeight: FontWeight.w600,
         color: isDark ? AppColors.textPrimary : AppColors.lightTextPrimary,
         fontFeatures: const [FontFeature.tabularFigures()],
       );
