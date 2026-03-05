@@ -138,6 +138,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   late TextEditingController _addSubtaskController;
   late final ScrollController _scrollController;
   final GlobalKey _subtasksSectionKey = GlobalKey();
+  final GlobalKey _subtaskEditKey = GlobalKey();
+  String? _editingSubtaskId;
   Timer? _titleDebounce;
   Timer? _descDebounce;
   String _lastSubtaskText = '';
@@ -162,6 +164,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       _descController.text = widget.task.description ?? '';
       _addSubtaskController.clear();
       _lastSubtaskText = '';
+      _editingSubtaskId = null;
     }
   }
 
@@ -195,7 +198,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   void _scrollToSubtasks() {
-    // Delay so keyboard can open first, then scroll just enough to show Subtasks title + add bar
+    // Delay so keyboard can open first; scroll so "Subtasks" title has a little space above it
     Future.delayed(const Duration(milliseconds: 150), () {
       if (!mounted) return;
       final context = _subtasksSectionKey.currentContext;
@@ -204,7 +207,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
         context,
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
-        alignment: 0.12,
+        alignment: 0.06,
       );
     });
   }
@@ -650,12 +653,19 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   );
                 }
                 return Column(
-                  children: subtasks.map((t) => _SubtaskTile(
-                    task: t,
-                    onToggle: () => _onSubtaskToggle(context, t),
-                    onTap: () => _editSubtaskTitle(t),
-                    onDelete: () => _deleteSubtask(context, t),
-                  )).toList(),
+                  children: subtasks.map((t) {
+                    final isEditing = _editingSubtaskId == t.id;
+                    return _SubtaskTile(
+                      key: isEditing ? _subtaskEditKey : ValueKey(t.id),
+                      task: t,
+                      isEditing: isEditing,
+                      onToggle: () => _onSubtaskToggle(context, t),
+                      onTap: () => _startEditingSubtask(t),
+                      onDelete: () => _deleteSubtask(context, t),
+                      onSaveTitle: (title) => _saveSubtaskTitle(t.id, title),
+                      onCancelEdit: _cancelEditingSubtask,
+                    );
+                  }).toList(),
                 );
               },
             ),
@@ -701,45 +711,35 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     if (ok == true) await widget.db.deleteTaskAndDependencies(t.id);
   }
 
-  Future<void> _editSubtaskTitle(Task subtask) async {
-    final controller = TextEditingController(text: subtask.title);
-    final newTitle = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return AlertDialog(
-          title: const Text('Edit subtask'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            minLines: 1,
-            maxLines: 4,
-            decoration: InputDecoration(
-              labelText: 'Subtask title',
-              labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-            ),
-            onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
+  void _startEditingSubtask(Task subtask) {
+    setState(() => _editingSubtaskId = subtask.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _editingSubtaskId != subtask.id) return;
+      final ctx = _subtaskEditKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          alignment: 0.2,
         );
-      },
-    );
-    if (newTitle == null) return;
+      }
+    });
+  }
+
+  Future<void> _saveSubtaskTitle(String subtaskId, String newTitle) async {
     final trimmed = newTitle.trim();
-    if (trimmed.isEmpty || trimmed == subtask.title) return;
-    await widget.db.updateTaskById(
-      subtask.id,
-      TasksCompanion(title: Value(trimmed)),
-    );
+    if (trimmed.isNotEmpty) {
+      await widget.db.updateTaskById(
+        subtaskId,
+        TasksCompanion(title: Value(trimmed)),
+      );
+    }
+    if (mounted) setState(() => _editingSubtaskId = null);
+  }
+
+  void _cancelEditingSubtask() {
+    setState(() => _editingSubtaskId = null);
   }
 }
 
@@ -957,23 +957,89 @@ class _ScheduleIconButton extends StatelessWidget {
   }
 }
 
-/// Section to add or edit the completion note for this task (shown when task is completed).
-class _SubtaskTile extends StatelessWidget {
+/// Inline-editable subtask row: tap to edit title, scroll brings it into view.
+class _SubtaskTile extends StatefulWidget {
   final Task task;
+  final bool isEditing;
   final VoidCallback onToggle;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final void Function(String title) onSaveTitle;
+  final VoidCallback onCancelEdit;
 
   const _SubtaskTile({
+    super.key,
     required this.task,
+    required this.isEditing,
     required this.onToggle,
     required this.onTap,
     required this.onDelete,
+    required this.onSaveTitle,
+    required this.onCancelEdit,
   });
+
+  @override
+  State<_SubtaskTile> createState() => _SubtaskTileState();
+}
+
+class _SubtaskTileState extends State<_SubtaskTile> {
+  TextEditingController? _controller;
+  FocusNode? _focusNode;
+
+  void _attachEditingControllers() {
+    _controller = TextEditingController(text: widget.task.title);
+    _focusNode = FocusNode();
+    _focusNode!.addListener(_onFocusChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode?.requestFocus();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) _attachEditingControllers();
+  }
+
+  @override
+  void didUpdateWidget(_SubtaskTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isEditing && widget.isEditing) {
+      if (_controller == null) _attachEditingControllers();
+    } else if (oldWidget.isEditing && !widget.isEditing) {
+      _focusNode?.removeListener(_onFocusChange);
+      _controller?.dispose();
+      _focusNode?.dispose();
+      _controller = null;
+      _focusNode = null;
+    } else if (widget.isEditing && oldWidget.task.id != widget.task.id) {
+      _controller?.text = widget.task.title;
+    }
+  }
+
+  void _onFocusChange() {
+    if (_focusNode?.hasFocus == false) _commitEdit();
+  }
+
+  void _commitEdit() {
+    final text = _controller?.text.trim() ?? '';
+    widget.onSaveTitle(text.isEmpty ? widget.task.title : text);
+  }
+
+  @override
+  void dispose() {
+    _focusNode?.removeListener(_onFocusChange);
+    _controller?.dispose();
+    _focusNode?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final task = widget.task;
+    final isEditing = widget.isEditing;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -981,7 +1047,7 @@ class _SubtaskTile extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: isEditing ? null : widget.onTap,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -995,49 +1061,84 @@ class _SubtaskTile extends StatelessWidget {
                       height: 28,
                       child: Checkbox(
                         value: task.isCompleted,
-                        onChanged: (_) => onToggle(),
+                        onChanged: (_) => widget.onToggle(),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          task.title,
-                          maxLines: null,
-                          softWrap: true,
-                          style: TextStyle(
-                            color: colorScheme.onSurface,
-                            fontSize: 15,
-                            height: 1.35,
-                            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                    child: isEditing && _controller != null && _focusNode != null
+                        ? TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            maxLines: null,
+                            minLines: 1,
+                            cursorColor: colorScheme.primary,
+                            style: TextStyle(
+                              color: colorScheme.onSurface,
+                              fontSize: 15,
+                              height: 1.35,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: Theme.of(context).scaffoldBackgroundColor,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                            ),
+                            onSubmitted: (_) => _commitEdit(),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                task.title,
+                                maxLines: null,
+                                softWrap: true,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  fontSize: 15,
+                                  height: 1.35,
+                                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                   const SizedBox(width: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (task.deadline != null)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Icon(Icons.schedule_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                      if (isEditing)
+                        IconButton(
+                          icon: const Icon(Icons.check, size: 22),
+                          onPressed: _commitEdit,
+                          color: colorScheme.primary,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        )
+                      else ...[
+                        if (task.deadline != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(Icons.schedule_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 22),
+                          onPressed: widget.onDelete,
+                          color: colorScheme.onSurfaceVariant,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 22),
-                        onPressed: onDelete,
-                        color: colorScheme.onSurfaceVariant,
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(44, 44),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
