@@ -380,8 +380,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       controller: _scrollController,
       padding: const EdgeInsets.all(20),
       child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.deferToChild,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        behavior: HitTestBehavior.translucent,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
