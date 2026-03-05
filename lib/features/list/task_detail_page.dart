@@ -1052,20 +1052,17 @@ class _SubtaskTileState extends State<_SubtaskTile> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: Checkbox(
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Checkbox(
                         value: task.isCompleted,
                         onChanged: (_) => widget.onToggle(),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
-                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: isEditing && _controller != null && _focusNode != null
