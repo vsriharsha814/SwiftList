@@ -347,7 +347,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Title: single scrollable line, no box
+          // Title: single scrollable line, blends into page (no filled background)
           TextField(
             controller: _titleController,
             maxLines: 1,
@@ -356,14 +356,14 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
               fontSize: 22,
               fontWeight: FontWeight.w700,
             ),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: 'New task title',
-              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+              filled: false,
               isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
           const SizedBox(height: 8),
