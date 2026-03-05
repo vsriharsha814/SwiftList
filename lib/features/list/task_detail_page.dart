@@ -198,8 +198,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   void _scrollToSubtasks() {
-    // Delay so keyboard can open first; scroll so "Subtasks" title has a little space above it
-    Future.delayed(const Duration(milliseconds: 150), () {
+    // Wait for keyboard (and any auto-scroll) to settle, then scroll so "Subtasks" heading is in view with space above
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       final context = _subtasksSectionKey.currentContext;
       if (context == null) return;
@@ -207,7 +207,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
         context,
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
-        alignment: 0.06,
+        alignment: 0.08,
       );
     });
   }
@@ -379,9 +379,12 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.deferToChild,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           // Title: single scrollable line, blends into page (no filled background)
           TextField(
             controller: _titleController,
@@ -564,11 +567,11 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
           if (widget.task.parentId == null) ...[
             const SizedBox(height: _spaceSection),
             Column(
-              key: _subtasksSectionKey,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
             Row(
+              key: _subtasksSectionKey,
               children: [
                 Icon(Icons.checklist_rounded, size: 22, color: AppColors.actionAccent),
                 const SizedBox(width: 10),
@@ -673,6 +676,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             ),
           ],
         ],
+        ),
       ),
     );
   }
