@@ -792,7 +792,7 @@ class _CollapsibleSectionCardState extends State<_CollapsibleSectionCard> {
         side: BorderSide(color: widget.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
