@@ -137,6 +137,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   late TextEditingController _descController;
   late TextEditingController _addSubtaskController;
   late final ScrollController _scrollController;
+  final GlobalKey _subtasksSectionKey = GlobalKey();
   Timer? _titleDebounce;
   Timer? _descDebounce;
   String _lastSubtaskText = '';
@@ -194,12 +195,16 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   void _scrollToSubtasks() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+    // Delay so keyboard can open first, then scroll just enough to show Subtasks title + add bar
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      final context = _subtasksSectionKey.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,
+        alignment: 0.12,
       );
     });
   }
@@ -555,6 +560,11 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
           // Subtasks: only for root tasks (one level of subtasking)
           if (widget.task.parentId == null) ...[
             const SizedBox(height: _spaceSection),
+            Column(
+              key: _subtasksSectionKey,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
             Row(
               children: [
                 Icon(Icons.checklist_rounded, size: 22, color: AppColors.actionAccent),
@@ -648,6 +658,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                   )).toList(),
                 );
               },
+            ),
+              ],
             ),
           ],
         ],

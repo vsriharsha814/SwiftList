@@ -208,7 +208,8 @@ class _ListScreenState extends State<ListScreen> {
                   : () {
                       return tasks.where((t) => !t.isArchived).toList();
                     }();
-              final sortedTasks = sortIncompleteByDeadlineThenCompleted(displayTasks);
+              // Main list: newest added first. Archive: also newest first.
+              final sortedTasks = sortByDateAdded(displayTasks);
               // Progress: completed vs total among the tasks we're showing (non-archived when on main list).
               final progress = !showingArchive && displayTasks.isNotEmpty
                   ? weightedProgress(displayTasks)
