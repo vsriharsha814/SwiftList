@@ -334,7 +334,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
   }
 
   static const double _spaceSection = 32;
-  static const double _spaceBlock = 24;
+  static const double _spaceBlock = 18;
   static const double _spaceRow = 16;
   static const double _minTouchTarget = 44;
 
@@ -531,7 +531,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -562,7 +562,7 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 StreamBuilder<List<Task>>(
                   stream: widget.db.watchChildrenOf(widget.task.id),
                   builder: (context, snap) {
@@ -777,7 +777,7 @@ class _SectionCard extends StatelessWidget {
         side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
