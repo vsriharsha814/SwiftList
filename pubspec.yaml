@@ -44,7 +44,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
 
 flutter_native_splash:
-  color: "#121212"  # Zen Studio deep charcoal
+  color: "#121212"  # Swiftlist deep charcoal
   image: assets/icons/swift_icon.png  # Path to your logo or splash image
   android: true  # Enable splash for Android
   ios: true  # Enable splash for iOS

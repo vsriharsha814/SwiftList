@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Zen Studio palette: Deep Charcoal, Slate Gray, single Action Accent.
+/// Swiftlist palette: Deep Charcoal, Slate Gray, single Action Accent.
 class AppColors {
   AppColors._();
 

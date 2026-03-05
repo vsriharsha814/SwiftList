@@ -14,7 +14,7 @@ class MyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialButton(
       onPressed: onPressed,
-      color: Colors.deepPurple, // Legacy; consider AppColors.actionAccent for Zen Studio
+      color: Colors.deepPurple, // Legacy; consider AppColors.actionAccent for Swiftlist
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),

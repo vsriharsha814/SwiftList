@@ -1,7 +1,7 @@
 # To-Do App Revamp — Plan & Work Breakdown
 
 ## Overview
-Revamp the existing Flutter to-do app into **"Zen Studio"** with hierarchical tasks, dual-mode timers with foreground persistence, RFC 5545 recurrence, escalating reminders, and a three-pillar UI (List, Focus Mode, Pulse Dashboard).
+Revamp the existing Flutter to-do app **Swiftlist** with hierarchical tasks, dual-mode timers with foreground persistence, RFC 5545 recurrence, escalating reminders, and a three-pillar UI (List, Focus Mode, Pulse Dashboard).
 
 ---
 
@@ -38,7 +38,7 @@ Revamp the existing Flutter to-do app into **"Zen Studio"** with hierarchical ta
 
 ---
 
-## 2. UI/UX — "The Zen Studio"
+## 2. UI/UX — Swiftlist
 
 ### Visual language
 - **Palette**: Deep Charcoal `#121212`, Slate Gray `#2C2C2E`, one **Action Accent** (e.g. Electric Blue or Vivid Orange).
@@ -87,7 +87,7 @@ Revamp the existing Flutter to-do app into **"Zen Studio"** with hierarchical ta
 
 | Phase | Content |
 |-------|---------|
-| **1** | Foundation: Drift schema, Zen Studio theme, app shell with bottom nav (List / Focus / Pulse). |
+| **1** | Foundation: Drift schema, Swiftlist theme, app shell with bottom nav (List / Focus / Pulse). |
 | **2** | Hierarchical WBS: CRUD for nodes, weights, drill-down list, progress computation. |
 | **3** | Option Timer: countdown/stopwatch UI, foreground service, time_logs. |
 | **4** | Recurrence: rrule parsing, current instance, EXDATE, "done → next instance". |
