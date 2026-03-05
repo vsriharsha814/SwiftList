@@ -384,8 +384,9 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             ),
           ),
           const SizedBox(height: _spaceSection),
-          // —— Time & Schedule card ——
-          _SectionCard(
+          // —— Time & Schedule card (collapsible) ——
+          _CollapsibleSectionCard(
+            icon: Icons.schedule_rounded,
             title: 'Time & Schedule',
             colorScheme: colorScheme,
             child: Column(
@@ -525,7 +526,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
             ),
           ),
           const SizedBox(height: _spaceSection),
-          _SectionCard(
+          _CollapsibleSectionCard(
+            icon: Icons.checklist_rounded,
             title: 'Subtasks',
             colorScheme: colorScheme,
             child: Column(
@@ -760,13 +762,26 @@ class _DueDatePill extends StatelessWidget {
   }
 }
 
-/// Section card with title (Task Details, Time & Schedule, Subtasks).
-class _SectionCard extends StatelessWidget {
+/// Collapsible section card with icon + title; tap header to expand/collapse.
+class _CollapsibleSectionCard extends StatefulWidget {
+  final IconData icon;
   final String title;
   final ColorScheme colorScheme;
   final Widget child;
 
-  const _SectionCard({required this.title, required this.colorScheme, required this.child});
+  const _CollapsibleSectionCard({
+    required this.icon,
+    required this.title,
+    required this.colorScheme,
+    required this.child,
+  });
+
+  @override
+  State<_CollapsibleSectionCard> createState() => _CollapsibleSectionCardState();
+}
+
+class _CollapsibleSectionCardState extends State<_CollapsibleSectionCard> {
+  bool _expanded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -774,23 +789,60 @@ class _SectionCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+        side: BorderSide(color: widget.colorScheme.outline.withOpacity(0.2)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.icon,
+                      size: 22,
+                      color: AppColors.actionAccent,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: TextStyle(
+                          color: widget.colorScheme.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _expanded ? 0 : 0.5,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.expand_more,
+                        size: 24,
+                        color: widget.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            child,
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: _expanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: widget.child,
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),
