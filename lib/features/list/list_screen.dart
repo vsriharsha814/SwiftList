@@ -200,33 +200,16 @@ class _ListScreenState extends State<ListScreen> {
             return const Center(child: CircularProgressIndicator(color: AppColors.actionAccent));
           }
           final rawTasks = snapshot.data!;
-          // On main page: show root tasks + their direct subtasks. In drill-down: show only children.
+          // On main page: show only root tasks. In drill-down: show only children of the current parent.
           final tasks = _currentParentId == null
-              ? () {
-                  final rootIds = rawTasks.where((t) => t.parentId == null).map((t) => t.id).toSet();
-                  return rawTasks
-                      .where((t) => t.parentId == null || rootIds.contains(t.parentId))
-                      .toList();
-                }()
-              : rawTasks;
+              ? rawTasks.where((t) => t.parentId == null).toList()
+              : rawTasks.where((t) => t.parentId == _currentParentId).toList();
           final showingArchive = _showingArchive;
           // Main list: show all non-archived tasks (completed stay visible until user archives). Archive view: show archived only.
           final displayTasks = showingArchive
                   ? tasks.where((t) => t.isArchived).toList()
                   : () {
-                      if (_currentParentId != null) {
-                        return tasks.where((t) => !t.isArchived).toList();
-                      }
-                      final visibleRootIds = tasks
-                          .where((t) => t.parentId == null && !t.isArchived)
-                          .map((t) => t.id)
-                          .toSet();
-                      return tasks
-                          .where((t) =>
-                              t.parentId == null
-                                  ? !t.isArchived
-                                  : visibleRootIds.contains(t.parentId) && !t.isArchived)
-                          .toList();
+                      return tasks.where((t) => !t.isArchived).toList();
                     }();
               final sortedTasks = sortIncompleteByDeadlineThenCompleted(displayTasks);
               // Progress: completed vs total among the tasks we're showing (non-archived when on main list).
@@ -683,6 +666,24 @@ class _ListScreenState extends State<ListScreen> {
 
   /// Marks task complete and spawns next if recurring.
   Future<void> _markTaskComplete(BuildContext context, AppDatabase db, Task task) async {
+    // If task has any subtasks that are not yet completed, take the user into the detail page
+    // so they can finish or clear those subtasks before closing the parent.
+    final children = await db.childrenOf(task.id);
+    final hasIncompleteChildren = children.any((t) => !t.isCompleted);
+    if (hasIncompleteChildren) {
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TaskDetailPage(taskId: task.id),
+          ),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Complete or remove subtasks before closing this task')),
+        );
+      }
+      return;
+    }
     final now = DateTime.now();
     await db.updateTaskById(task.id, TasksCompanion(isCompleted: const Value(true), completedAt: Value(now)));
     if (task.rrule != null && task.rrule!.isNotEmpty) {
