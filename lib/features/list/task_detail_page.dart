@@ -1146,7 +1146,6 @@ class _SubtaskTileState extends State<_SubtaskTile> {
             ),
           ),
         ),
-        Divider(height: 1, color: colorScheme.outline.withOpacity(0.2)),
       ],
     );
   }
