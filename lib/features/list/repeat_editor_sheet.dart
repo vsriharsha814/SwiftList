@@ -53,8 +53,8 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
       _endCount = r.endCount;
       if (r.endCount != null) _endCountController.text = r.endCount.toString();
     }
-    if (_monthOrdinal == null) _monthOrdinal = 1;
-    if (_monthWeekday == null) _monthWeekday = 1;
+    _monthOrdinal ??= 1;
+    _monthWeekday ??= 1;
   }
 
   @override
@@ -139,7 +139,11 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
                             label: Text(_weekdayLabels[i], style: TextStyle(color: selected ? colorScheme.onPrimary : colorScheme.onSurface)),
                             selected: selected,
                             onSelected: (v) => setState(() {
-                              if (v) _days.add(day); else _days.remove(day);
+                              if (v) {
+                                _days.add(day);
+                              } else {
+                                _days.remove(day);
+                              }
                             }),
                             selectedColor: colorScheme.primary,
                             checkmarkColor: colorScheme.onPrimary,
@@ -152,9 +156,9 @@ class _RepeatEditorSheetState extends State<_RepeatEditorSheet> {
                       Text('Monthly repeat on', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),
                       SegmentedButton<bool>(
-                        segments: [
-                          ButtonSegment(value: false, label: const Text('Day of month')),
-                          ButtonSegment(value: true, label: const Text('Weekday of month')),
+                        segments: const [
+                          ButtonSegment(value: false, label: Text('Day of month')),
+                          ButtonSegment(value: true, label: Text('Weekday of month')),
                         ],
                         selected: {_useMonthWeekday},
                         onSelectionChanged: (v) => setState(() => _useMonthWeekday = v.first),

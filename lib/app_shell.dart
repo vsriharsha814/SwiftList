@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:to_do_flutter_app/core/theme/app_colors.dart';
 import 'package:to_do_flutter_app/features/list/list_screen.dart';
 import 'package:to_do_flutter_app/features/pulse/pulse_screen.dart';
 

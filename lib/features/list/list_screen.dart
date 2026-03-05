@@ -740,8 +740,9 @@ class _TaskCard extends StatelessWidget {
 
     final colorScheme = Theme.of(context).colorScheme;
     Color? cardColor;
-    if (isSelected) cardColor = colorScheme.primaryContainer.withOpacity(0.5);
-    else if (isOverdue) cardColor = colorScheme.errorContainer.withOpacity(0.5);
+    if (isSelected) {
+      cardColor = colorScheme.primaryContainer.withOpacity(0.5);
+    } else if (isOverdue) cardColor = colorScheme.errorContainer.withOpacity(0.5);
     else if (isDueSoon) cardColor = colorScheme.tertiaryContainer.withOpacity(0.5);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),

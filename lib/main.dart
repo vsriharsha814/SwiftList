@@ -50,7 +50,7 @@ class ZenStudioApp extends StatelessWidget {
           }
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Zen Studio',
+            title: 'Swiftlist',
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,
             themeMode: themeMode,

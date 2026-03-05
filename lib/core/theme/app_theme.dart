@@ -126,7 +126,7 @@ class AppTheme {
           backgroundColor: AppColors.actionAccent,
           foregroundColor: Colors.white,
         ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: AppColors.lightCardBackground,
           selectedItemColor: AppColors.actionAccent,
           unselectedItemColor: AppColors.lightTextSecondary,

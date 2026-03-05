@@ -482,7 +482,11 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                                         onSelected: enabled
                                             ? (v) async {
                                                 final current = parseReminderMinutes(widget.task.reminderMinutesBefore).toSet();
-                                                if (v) current.add(minutes); else current.remove(minutes);
+                                                if (v) {
+                                                  current.add(minutes);
+                                                } else {
+                                                  current.remove(minutes);
+                                                }
                                                 await _saveReminders(current.toList()..sort());
                                               }
                                             : null,
