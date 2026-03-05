@@ -102,7 +102,8 @@ class AppDatabase extends _$AppDatabase {
   // --- Tasks ---
   Future<List<Task>> get allTasks => select(tasks).get();
   Future<List<Task>> get rootTasks => (select(tasks)..where((t) => t.parentId.isNull())).get();
-  Stream<List<Task>> watchRootTasks() => (select(tasks)..where((t) => t.parentId.isNull())).watch();
+  Stream<List<Task>> watchRootTasks() =>
+      (select(tasks)..where((t) => t.parentId.isNull())..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
 
   Future<List<Task>> childrenOf(String? parentId) {
     if (parentId == null || parentId.isEmpty) return rootTasks;
@@ -111,7 +112,10 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Task>> watchChildrenOf(String? parentId) {
     if (parentId == null || parentId.isEmpty) return watchRootTasks();
-    return (select(tasks)..where((t) => t.parentId.equals(parentId))).watch();
+    return (select(tasks)
+          ..where((t) => t.parentId.equals(parentId))
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+        .watch();
   }
 
   /// All tasks (for main page: root + subtasks sorted by date added).

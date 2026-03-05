@@ -159,6 +159,8 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
     if (oldWidget.task.id != widget.task.id) {
       _titleController.text = widget.task.title;
       _descController.text = widget.task.description ?? '';
+      _addSubtaskController.clear();
+      _lastSubtaskText = '';
     }
   }
 
@@ -640,7 +642,6 @@ class _TaskDetailContentState extends State<_TaskDetailContent> {
                 return Column(
                   children: subtasks.map((t) => _SubtaskTile(
                     task: t,
-                    parentTitle: widget.task.title,
                     onToggle: () => _onSubtaskToggle(context, t),
                     onTap: () => _editSubtaskTitle(t),
                     onDelete: () => _deleteSubtask(context, t),
@@ -947,14 +948,12 @@ class _ScheduleIconButton extends StatelessWidget {
 /// Section to add or edit the completion note for this task (shown when task is completed).
 class _SubtaskTile extends StatelessWidget {
   final Task task;
-  final String parentTitle;
   final VoidCallback onToggle;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
   const _SubtaskTile({
     required this.task,
-    required this.parentTitle,
     required this.onToggle,
     required this.onTap,
     required this.onDelete,
@@ -1005,13 +1004,6 @@ class _SubtaskTile extends StatelessWidget {
                             height: 1.35,
                             decoration: task.isCompleted ? TextDecoration.lineThrough : null,
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Subtask of $parentTitle',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
                         ),
                       ],
                     ),

@@ -82,29 +82,26 @@ class _ListScreenState extends State<ListScreen> {
     return sorted;
   }
 
-  /// Sort by date added (createdAt), oldest first.
+  /// Sort by date added (createdAt), newest first.
   static List<Task> sortByDateAdded(List<Task> tasks) {
     final sorted = List<Task>.from(tasks);
-    sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return sorted;
   }
 
-  /// Incomplete first (by createdAt), then completed at bottom in order they were checked off (completedAt ascending).
+  /// Incomplete first (newest first by createdAt), then completed at bottom (newest first by createdAt).
   static List<Task> sortIncompleteFirstThenCompletedByCheckedOff(List<Task> tasks) {
     final sorted = List<Task>.from(tasks);
     sorted.sort((a, b) {
       if (!a.isCompleted && b.isCompleted) return -1;
       if (a.isCompleted && !b.isCompleted) return 1;
-      if (!a.isCompleted && !b.isCompleted) return a.createdAt.compareTo(b.createdAt);
-      // Both completed: by completedAt (null = treat as oldest, so first)
-      final aAt = a.completedAt ?? DateTime(0);
-      final bAt = b.completedAt ?? DateTime(0);
-      return aAt.compareTo(bAt);
+      if (!a.isCompleted && !b.isCompleted) return b.createdAt.compareTo(a.createdAt);
+      return b.createdAt.compareTo(a.createdAt);
     });
     return sorted;
   }
 
-  /// Incomplete first; among incomplete, soonest deadline first (overdue at top, then due in 1 hr, etc.); no deadline last. Completed at bottom by completedAt.
+  /// Incomplete first; among incomplete, soonest deadline first (overdue at top, then due in 1 hr, etc.); no deadline last (newest first within group). Completed at bottom, newest first by createdAt.
   static List<Task> sortIncompleteByDeadlineThenCompleted(List<Task> tasks) {
     final sorted = List<Task>.from(tasks);
     sorted.sort((a, b) {
@@ -113,14 +110,14 @@ class _ListScreenState extends State<ListScreen> {
       if (!a.isCompleted && !b.isCompleted) {
         final aHas = a.deadline != null;
         final bHas = b.deadline != null;
-        if (!aHas && !bHas) return a.createdAt.compareTo(b.createdAt);
+        if (!aHas && !bHas) return b.createdAt.compareTo(a.createdAt);
         if (!aHas) return 1;
         if (!bHas) return -1;
-        return a.deadline!.compareTo(b.deadline!);
+        final byDeadline = a.deadline!.compareTo(b.deadline!);
+        if (byDeadline != 0) return byDeadline;
+        return b.createdAt.compareTo(a.createdAt);
       }
-      final aAt = a.completedAt ?? DateTime(0);
-      final bAt = b.completedAt ?? DateTime(0);
-      return aAt.compareTo(bAt);
+      return b.createdAt.compareTo(a.createdAt);
     });
     return sorted;
   }
